@@ -1,5 +1,5 @@
 import type { IncomingMessage, ServerResponse } from 'http';
-import { handleOdooRequest, OdooProxyRequest } from '../src/server/odooController';
+import { handleOdooRequest, OdooProxyRequest } from './_lib/odooController.js';
 
 interface VercelRequest extends IncomingMessage {
   query: Record<string, string | string[]>;
