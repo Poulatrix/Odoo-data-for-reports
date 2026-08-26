@@ -1,13 +1,55 @@
 import { 
   OdooConnectionCredentials, 
-  OdooConnectionState, 
-  OdooSearchReadResponse,
-  OdooFieldDefinition,
-  UninvoicedReportResponse
+  OdooSearchReadResponse, 
+  UninvoicedReportResponse 
 } from '../types/odoo';
 
-const STORAGE_KEY_CREDS = 'odoo_saas_credentials_v1';
-const STORAGE_KEY_DEMO = 'odoo_saas_is_demo_v1';
+/**
+ * Robust JSON fetcher for Vercel / Express environments
+ * Prevents "Unexpected token '<'" or "Unexpected token 'T'" by verifying response type and status
+ */
+async function safeFetchJson<T>(url: string, bodyPayload: any): Promise<T> {
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
+      },
+      body: JSON.stringify(bodyPayload)
+    });
+  } catch (netErr: any) {
+    throw new Error(
+      `Impossible de contacter le serveur Odoo (${netErr.message || 'Erreur réseau'}). Vérifiez votre connexion.`
+    );
+  }
+
+  const contentType = res.headers.get('content-type') || '';
+  const isJson = contentType.includes('application/json');
+
+  if (!isJson) {
+    const rawText = await res.text();
+    console.warn(`[SafeFetch] Non-JSON response received from ${url} (HTTP ${res.status}):`, rawText.slice(0, 150));
+    
+    if (rawText.trim().startsWith('<') || rawText.includes('<!DOCTYPE') || rawText.includes('<html')) {
+      throw new Error(
+        `Le serveur proxy ou Odoo a renvoyé une page HTML (HTTP ${res.status}). Vérifiez que l'URL Odoo est correcte et accessible.`
+      );
+    }
+    
+    throw new Error(
+      rawText.slice(0, 200) || `Erreur serveur (HTTP ${res.status}). Impossible de contacter le serveur Odoo.`
+    );
+  }
+
+  const data = await res.json();
+  if (!res.ok && data?.error) {
+    throw new Error(data.error);
+  }
+
+  return data as T;
+}
 
 class OdooClientService {
   private inMemoryCreds: OdooConnectionCredentials | null = null;
@@ -40,7 +82,7 @@ class OdooClientService {
     this.inMemoryDemo = isDemo;
   }
 
-  // Test connection to Odoo backend API
+  // Test connection to Odoo via server proxy (Vercel Serverless / Express)
   public async testConnection(creds?: OdooConnectionCredentials, isDemo: boolean = false): Promise<{
     success: boolean;
     uid?: number;
@@ -51,28 +93,37 @@ class OdooClientService {
     error?: string;
   }> {
     try {
-      const res = await fetch('/api/odoo/test-connection', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          url: creds?.url,
-          db: creds?.db,
-          username: creds?.username,
-          apiKey: creds?.apiKey,
-          isDemo
-        })
-      });
-      const data = await res.json();
+      const payload = {
+        action: 'test-connection',
+        url: creds?.url,
+        db: creds?.db,
+        username: creds?.username,
+        apiKey: creds?.apiKey,
+        credentials: creds,
+        isDemo
+      };
+
+      // Calls /api/odoo proxy
+      const data = await safeFetchJson<{
+        success: boolean;
+        uid?: number;
+        serverVersion?: string;
+        serverVersionInfo?: any[];
+        companyName?: string;
+        latencyMs?: number;
+        error?: string;
+      }>('/api/odoo', payload);
+
       return data;
     } catch (err: any) {
       return {
         success: false,
-        error: err.message || 'Erreur réseau lors de la communication avec le serveur SaaS.'
+        error: err.message || 'Impossible de contacter le serveur Odoo. Vérifiez l\'URL et vos identifiants.'
       };
     }
   }
 
-  // Search & Read data from Odoo
+  // Search & Read data from Odoo via server proxy
   public async searchRead(params: {
     model: string;
     domain?: any[];
@@ -85,29 +136,20 @@ class OdooClientService {
     isDemo?: boolean;
   }): Promise<OdooSearchReadResponse> {
     try {
-      const res = await fetch('/api/odoo/search-read', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          model: params.model,
-          domain: params.domain || [],
-          fields: params.fields || [],
-          offset: params.offset || 0,
-          limit: params.limit || 80,
-          order: params.order || 'id desc',
-          forceRefresh: params.forceRefresh || false,
-          credentials: params.credentials,
-          isDemo: params.isDemo
-        })
-      });
+      const payload = {
+        action: 'search-read',
+        model: params.model,
+        domain: params.domain || [],
+        fields: params.fields || [],
+        offset: params.offset || 0,
+        limit: params.limit || 80,
+        order: params.order || 'id desc',
+        forceRefresh: params.forceRefresh || false,
+        credentials: params.credentials,
+        isDemo: params.isDemo
+      };
 
-      if (!res.ok) {
-        const errData = await res.json().catch(() => ({}));
-        throw new Error(errData.error || `Erreur serveur HTTP ${res.status}`);
-      }
-
-      const data: OdooSearchReadResponse = await res.json();
-      return data;
+      return await safeFetchJson<OdooSearchReadResponse>('/api/odoo', payload);
     } catch (err: any) {
       return {
         success: false,
@@ -116,17 +158,21 @@ class OdooClientService {
         totalCount: 0,
         fields: {},
         timestamp: new Date().toISOString(),
-        error: err.message || 'Erreur de récupération des données'
+        error: err.message || 'Impossible de contacter le serveur Odoo. Vérifiez l\'URL.'
       };
     }
   }
 
   // Clear Server Cache
   public async clearCache(): Promise<void> {
-    await fetch('/api/odoo/clear-cache', { method: 'POST' });
+    try {
+      await safeFetchJson('/api/odoo', { action: 'clear-cache' });
+    } catch (e) {
+      console.warn('Cache clear warning:', e);
+    }
   }
 
-  // Specialized Report: Bilan des Affaires à Facturer
+  // Specialized Report: Bilan des Affaires à Facturer via server proxy
   public async getUninvoicedOrdersReport(params: {
     forceRefresh?: boolean;
     credentials?: OdooConnectionCredentials;
@@ -134,23 +180,15 @@ class OdooClientService {
     asOfDate?: string;
   }): Promise<UninvoicedReportResponse> {
     try {
-      const res = await fetch('/api/odoo/report/uninvoiced-orders', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          forceRefresh: params.forceRefresh || false,
-          credentials: params.credentials,
-          isDemo: params.isDemo,
-          asOfDate: params.asOfDate
-        })
-      });
+      const payload = {
+        action: 'report/uninvoiced-orders',
+        forceRefresh: params.forceRefresh || false,
+        credentials: params.credentials,
+        isDemo: params.isDemo,
+        asOfDate: params.asOfDate
+      };
 
-      if (!res.ok) {
-        const errData = await res.json().catch(() => ({}));
-        throw new Error(errData.error || `Erreur serveur HTTP ${res.status}`);
-      }
-
-      return await res.json();
+      return await safeFetchJson<UninvoicedReportResponse>('/api/odoo', payload);
     } catch (err: any) {
       return {
         success: false,
@@ -167,11 +205,10 @@ class OdooClientService {
           totalValuation90: 0
         },
         timestamp: new Date().toISOString(),
-        error: err.message || 'Erreur lors du calcul du rapport des affaires à facturer.'
+        error: err.message || 'Impossible de contacter le serveur Odoo. Vérifiez l\'URL.'
       };
     }
   }
 }
 
 export const odooClient = new OdooClientService();
-
