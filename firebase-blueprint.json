@@ -1,0 +1,28 @@
+{
+  "entities": {
+    "user_settings": {
+      "title": "Paramètres Utilisateur et Connexion Odoo",
+      "description": "Stockage sécurisé et isolé des paramètres et identifiants Odoo par utilisateur",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "UID de l'utilisateur Firebase Auth" },
+        "url": { "type": "string", "description": "URL de base de l'instance Odoo" },
+        "db": { "type": "string", "description": "Nom de la base de données Odoo" },
+        "username": { "type": "string", "description": "Nom d'utilisateur / Email de connexion Odoo" },
+        "apiKey": { "type": "string", "description": "Clé API Odoo ou mot de passe d'accès" },
+        "isConfigured": { "type": "boolean", "description": "Indique si la configuration est valide et active" },
+        "columnPreferences": { "type": "object", "description": "Colonnes visibles personnalisées par modèle Odoo" },
+        "lastConnectedAt": { "type": "string", "description": "Horodatage de la dernière connexion réussie" },
+        "createdAt": { "type": "string", "description": "Date de création des paramètres" },
+        "updatedAt": { "type": "string", "description": "Date de dernière mise à jour" }
+      },
+      "required": ["userId"]
+    }
+  },
+  "firestore": {
+    "/user_settings/{userId}": {
+      "schema": "user_settings",
+      "description": "Document de configuration unique par utilisateur, sécurisé par RLS (seul le propriétaire userId peut lire et écrire)"
+    }
+  }
+}

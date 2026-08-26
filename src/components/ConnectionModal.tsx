@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { OdooConnectionCredentials, OdooConnectionState } from '../types/odoo';
 import { odooClient } from '../services/odooClient';
+import { useAuth } from '../context/AuthContext';
 
 interface ConnectionModalProps {
   isOpen: boolean;
@@ -31,10 +32,11 @@ export const ConnectionModal: React.FC<ConnectionModalProps> = ({
   connectionState,
   onUpdateConnection
 }) => {
+  const { currentUser, saveCredentials, clearSavedCredentials, isConfigured } = useAuth();
   const [activeTab, setActiveTab] = useState<'real' | 'demo'>('real');
   const [url, setUrl] = useState(connectionState.credentials?.url || 'https://');
   const [db, setDb] = useState(connectionState.credentials?.db || '');
-  const [username, setUsername] = useState(connectionState.credentials?.username || '');
+  const [username, setUsername] = useState(connectionState.credentials?.username || currentUser?.email || 'hubert.n@ecomi.eu');
   const [apiKey, setApiKey] = useState(connectionState.credentials?.apiKey || '');
   
   const [isTesting, setIsTesting] = useState(false);
@@ -47,6 +49,21 @@ export const ConnectionModal: React.FC<ConnectionModalProps> = ({
   } | null>(null);
 
   const [showGuide, setShowGuide] = useState(false);
+
+  // Sync with connectionState when opened
+  React.useEffect(() => {
+    if (isOpen) {
+      if (connectionState.credentials) {
+        setUrl(connectionState.credentials.url || 'https://');
+        setDb(connectionState.credentials.db || '');
+        setUsername(connectionState.credentials.username || currentUser?.email || 'hubert.n@ecomi.eu');
+        setApiKey(connectionState.credentials.apiKey || '');
+      } else if (currentUser?.email) {
+        setUsername(currentUser.email);
+      }
+      setTestResult(null);
+    }
+  }, [isOpen, connectionState.credentials, currentUser]);
 
   if (!isOpen) return null;
 
@@ -79,7 +96,16 @@ export const ConnectionModal: React.FC<ConnectionModalProps> = ({
     setIsTesting(false);
 
     if (res.success) {
+      // Save credentials into Firestore if logged in
+      if (currentUser) {
+        try {
+          await saveCredentials(creds);
+        } catch (saveErr) {
+          console.error('Erreur sauvegarde Firestore:', saveErr);
+        }
+      }
       odooClient.saveCredentials(creds);
+
       onUpdateConnection({
         isConnected: true,
         isDemoMode: false,
@@ -96,6 +122,30 @@ export const ConnectionModal: React.FC<ConnectionModalProps> = ({
     } else {
       setTestResult(res);
     }
+  };
+
+  const handleClearCredentials = async () => {
+    if (currentUser) {
+      await clearSavedCredentials();
+    }
+    odooClient.clearCredentials();
+    setUrl('https://');
+    setDb('');
+    setUsername('');
+    setApiKey('');
+    setTestResult(null);
+    onUpdateConnection({
+      isConnected: true,
+      isDemoMode: true,
+      userInfo: {
+        uid: 2,
+        name: 'Marc Demo (Sandbox)',
+        serverVersion: 'Odoo 17.0 Enterprise (Sandbox)'
+      },
+      latencyMs: 12,
+      lastChecked: new Date().toISOString()
+    });
+    onClose();
   };
 
   const handleActivateDemoMode = () => {
@@ -354,17 +404,29 @@ export const ConnectionModal: React.FC<ConnectionModalProps> = ({
 
         {/* Modal Footer */}
         {activeTab === 'real' && (
-          <div className="px-6 py-4 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between bg-slate-50/50 dark:bg-slate-900/50">
-            <button
-              id="test-connection-btn"
-              type="button"
-              onClick={handleTestConnection}
-              disabled={isTesting || !url || !db || !username || !apiKey}
-              className="px-4 py-2 text-xs font-semibold rounded-xl border border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 transition-colors disabled:opacity-50 cursor-pointer flex items-center space-x-1.5"
-            >
-              {isTesting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
-              <span>Tester la connexion</span>
-            </button>
+          <div className="px-6 py-4 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between bg-slate-50/50 dark:bg-slate-900/50 flex-wrap gap-2">
+            <div className="flex items-center space-x-2">
+              <button
+                id="test-connection-btn"
+                type="button"
+                onClick={handleTestConnection}
+                disabled={isTesting || !url || !db || !username || !apiKey}
+                className="px-4 py-2 text-xs font-semibold rounded-xl border border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 transition-colors disabled:opacity-50 cursor-pointer flex items-center space-x-1.5"
+              >
+                {isTesting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
+                <span>Tester la connexion</span>
+              </button>
+
+              {(connectionState.credentials || isConfigured) && (
+                <button
+                  type="button"
+                  onClick={handleClearCredentials}
+                  className="px-3 py-2 text-xs font-medium text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-xl transition-colors cursor-pointer"
+                >
+                  Effacer
+                </button>
+              )}
+            </div>
 
             <div className="flex items-center space-x-2">
               <button

@@ -1300,17 +1300,19 @@ class OdooBackendService {
       // Total purchases / direct costs: Factures Fournisseurs + Écritures Analytiques Directes
       const totalPurchases = vendorBillsTotal + manualAnalyticCostsTotal;
 
-      const amountUntaxed = Number(so.amount_untaxed) || 0;
-      const amountTotal = Number(so.amount_total) || 0;
-      const grossMargin = amountUntaxed - totalPurchases;
-      const marginRate = amountUntaxed > 0 ? (grossMargin / amountUntaxed) * 100 : 0;
-      const hourlyMarginRate = totalHours > 0 ? grossMargin / totalHours : 0;
-
       // 2 Hourly Valuations requested by user:
       // 1. Total hours * 77.76 €/h
       // 2. Total hours * 90.00 €/h
       const valuation77_76 = Math.round(totalHours * 77.76 * 100) / 100;
       const valuation90 = Math.round(totalHours * 90.00 * 100) / 100;
+
+      const amountUntaxed = Number(so.amount_untaxed) || 0;
+      const amountTotal = Number(so.amount_total) || 0;
+
+      // User instruction: Marge = Montant Ventes HT - Achats & Coûts - Valorisation des heures à 77.76 €
+      const grossMargin = Math.round((amountUntaxed - totalPurchases - valuation77_76) * 100) / 100;
+      const marginRate = amountUntaxed > 0 ? Math.round(((grossMargin / amountUntaxed) * 100) * 10) / 10 : 0;
+      const hourlyMarginRate = totalHours > 0 ? Math.round((grossMargin / totalHours) * 100) / 100 : 0;
 
       const partnerName = Array.isArray(so.partner_id) ? so.partner_id[1] : (so.partner_id || 'Client inconnu');
       const clientDisplay = `${so.name} - ${partnerName}`;
@@ -1361,10 +1363,10 @@ class OdooBackendService {
     const totalPurchasesInvoiced = reportRows.reduce((acc, row) => acc + row.totalPurchases, 0);
     const totalVendorBills = reportRows.reduce((acc, row) => acc + (row.vendorBillsTotal || 0), 0);
     const totalManualAnalyticCosts = reportRows.reduce((acc, row) => acc + (row.manualAnalyticCostsTotal || 0), 0);
-    const totalGrossMargin = totalSalesUntaxed - totalPurchasesInvoiced;
-    const averageMarginRate = totalSalesUntaxed > 0 ? (totalGrossMargin / totalSalesUntaxed) * 100 : 0;
     const totalValuation77_76 = Math.round(totalTimesheetHours * 77.76 * 100) / 100;
     const totalValuation90 = Math.round(totalTimesheetHours * 90.00 * 100) / 100;
+    const totalGrossMargin = Math.round((totalSalesUntaxed - totalPurchasesInvoiced - totalValuation77_76) * 100) / 100;
+    const averageMarginRate = totalSalesUntaxed > 0 ? Math.round(((totalGrossMargin / totalSalesUntaxed) * 100) * 10) / 10 : 0;
 
     const finalResult = {
       records: reportRows,
@@ -1515,14 +1517,16 @@ class OdooBackendService {
       const manualAnalyticCostsTotal = orderManualAnalyticLines.reduce((sum, mal) => sum + mal.amount, 0);
       const totalPurchases = vendorBillsTotal + manualAnalyticCostsTotal;
 
-      const amountUntaxed = Number(so.amount_untaxed) || 0;
-      const amountTotal = Number(so.amount_total) || 0;
-      const grossMargin = amountUntaxed - totalPurchases;
-      const marginRate = amountUntaxed > 0 ? (grossMargin / amountUntaxed) * 100 : 0;
-      const hourlyMarginRate = totalHours > 0 ? grossMargin / totalHours : 0;
-
       const valuation77_76 = Math.round(totalHours * 77.76 * 100) / 100;
       const valuation90 = Math.round(totalHours * 90.00 * 100) / 100;
+
+      const amountUntaxed = Number(so.amount_untaxed) || 0;
+      const amountTotal = Number(so.amount_total) || 0;
+
+      // User instruction: Marge = Ventes HT - Achats/Coûts - Valorisation Heures @ 77.76 €
+      const grossMargin = Math.round((amountUntaxed - totalPurchases - valuation77_76) * 100) / 100;
+      const marginRate = amountUntaxed > 0 ? Math.round(((grossMargin / amountUntaxed) * 100) * 10) / 10 : 0;
+      const hourlyMarginRate = totalHours > 0 ? Math.round((grossMargin / totalHours) * 100) / 100 : 0;
 
       const partnerName = Array.isArray(so.partner_id) ? so.partner_id[1] : (so.partner_id || 'Client inconnu');
       const clientDisplay = `${so.name} - ${partnerName}`;

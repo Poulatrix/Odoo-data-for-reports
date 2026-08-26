@@ -14,6 +14,7 @@ import {
   Clock, 
   Receipt, 
   TrendingUp, 
+  TrendingDown,
   AlertCircle, 
   CheckCircle2, 
   Sparkles,
@@ -606,17 +607,33 @@ export const UninvoicedOrdersReport: React.FC<UninvoicedOrdersReportProps> = ({
         </div>
 
         {/* Metric 7: Marge Brute Totale */}
-        <div className="p-3.5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs col-span-2 md:col-span-2 lg:col-span-1">
+        <div className={`p-3.5 rounded-2xl border shadow-xs col-span-2 md:col-span-2 lg:col-span-1 ${
+          summary.totalGrossMargin < 0 
+            ? 'bg-rose-50/50 dark:bg-rose-950/20 border-rose-200 dark:border-rose-900/60' 
+            : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800'
+        }`}>
           <div className="flex items-center justify-between text-slate-500 dark:text-slate-400">
             <span className="text-[11px] font-semibold uppercase tracking-wider">Marge Brute</span>
-            <div className="p-1.5 rounded-lg bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400">
-              <TrendingUp className="w-3.5 h-3.5" />
+            <div className={`p-1.5 rounded-lg ${
+              summary.totalGrossMargin < 0 
+                ? 'bg-rose-100 dark:bg-rose-950/80 text-rose-600 dark:text-rose-400' 
+                : 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400'
+            }`}>
+              {summary.totalGrossMargin < 0 ? <TrendingDown className="w-3.5 h-3.5" /> : <TrendingUp className="w-3.5 h-3.5" />}
             </div>
           </div>
-          <div className="text-xl font-black text-emerald-600 dark:text-emerald-400 mt-1.5">
+          <div className={`text-xl font-black mt-1.5 ${
+            summary.totalGrossMargin < 0 
+              ? 'text-rose-600 dark:text-rose-400' 
+              : 'text-emerald-600 dark:text-emerald-400'
+          }`}>
             {formatCurrency(summary.totalGrossMargin)}
           </div>
-          <div className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 mt-0.5">
+          <div className={`text-[10px] font-bold mt-0.5 ${
+            summary.totalGrossMargin < 0 
+              ? 'text-rose-700 dark:text-rose-400' 
+              : 'text-emerald-600 dark:text-emerald-400'
+          }`}>
             Taux moyen : {summary.averageMarginRate}%
           </div>
         </div>
@@ -904,10 +921,18 @@ export const UninvoicedOrdersReport: React.FC<UninvoicedOrdersReportProps> = ({
 
                       {/* Column 8: Marge Estimée */}
                       <td className="px-4 py-4 text-right">
-                        <div className="font-mono font-bold text-emerald-600 dark:text-emerald-400 text-xs">
+                        <div className={`font-mono font-bold text-xs ${
+                          item.grossMargin < 0 
+                            ? 'text-rose-600 dark:text-rose-400' 
+                            : 'text-emerald-600 dark:text-emerald-400'
+                        }`}>
                           {formatCurrency(item.grossMargin)}
                         </div>
-                        <div className="text-[11px] font-semibold text-emerald-700 dark:text-emerald-400">
+                        <div className={`text-[11px] font-semibold ${
+                          item.grossMargin < 0 
+                            ? 'text-rose-700 dark:text-rose-400' 
+                            : 'text-emerald-700 dark:text-emerald-400'
+                        }`}>
                           {item.marginRate}%
                         </div>
                       </td>

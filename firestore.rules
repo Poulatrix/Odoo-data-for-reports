@@ -1,0 +1,15 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Permet la lecture et écriture des paramètres par identifiant d'utilisateur
+    match /user_settings/{userId} {
+      allow read, write: if request.auth != null ? request.auth.uid == userId : true;
+    }
+
+    // Refuser tout le reste
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
+

@@ -5,6 +5,9 @@ import { DataTable } from './components/DataTable/DataTable';
 import { UninvoicedOrdersReport } from './components/UninvoicedOrdersReport/UninvoicedOrdersReport';
 import { ConnectionModal } from './components/ConnectionModal';
 import { CustomModelModal } from './components/CustomModelModal';
+import { LoginPage } from './components/Auth/LoginPage';
+import { SecurityModal } from './components/Auth/SecurityModal';
+import { AuthProvider, useAuth } from './context/AuthContext';
 import { SUPPORTED_MODELS, MODEL_FIELD_DEFINITIONS } from './data/odooModels';
 import { 
   getUserIdentifier, 
@@ -24,10 +27,21 @@ import {
   RefreshCw,
   Server,
   Zap,
-  FileSpreadsheet
+  FileSpreadsheet,
+  Loader2
 } from 'lucide-react';
 
-export default function App() {
+function MainDashboard() {
+  const { 
+    currentUser, 
+    loading: authLoading, 
+    odooCredentials, 
+    isConfigured, 
+    isDemoMode, 
+    setDemoMode, 
+    logout 
+  } = useAuth();
+
   // Theme state
   const [isDarkMode, setIsDarkMode] = useState<boolean>(() => {
     return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
@@ -49,17 +63,14 @@ export default function App() {
 
   // Connection State
   const [connectionState, setConnectionState] = useState<OdooConnectionState>(() => {
-    const creds = odooClient.getSavedCredentials();
-    const isDemo = odooClient.isDemoMode();
-
-    if (creds && !isDemo) {
+    if (odooCredentials) {
       return {
         isConnected: true,
         isDemoMode: false,
-        credentials: creds,
+        credentials: odooCredentials,
         userInfo: {
           uid: 1,
-          name: creds.username,
+          name: odooCredentials.username,
           serverVersion: 'Odoo ERP (Connecté)'
         }
       };
@@ -67,7 +78,7 @@ export default function App() {
 
     return {
       isConnected: true,
-      isDemoMode: true,
+      isDemoMode: isDemoMode,
       userInfo: {
         uid: 2,
         name: 'Marc Demo (Sandbox)',
@@ -76,6 +87,35 @@ export default function App() {
       latencyMs: 14
     };
   });
+
+  // Sync connectionState when odooCredentials from Firestore or demoMode changes
+  useEffect(() => {
+    if (odooCredentials) {
+      odooClient.setRuntimeCredentials(odooCredentials, false);
+      setConnectionState({
+        isConnected: true,
+        isDemoMode: false,
+        credentials: odooCredentials,
+        userInfo: {
+          uid: 1,
+          name: odooCredentials.username,
+          serverVersion: 'Odoo ERP (Connecté)'
+        }
+      });
+    } else if (isDemoMode) {
+      odooClient.setDemoMode(true);
+      setConnectionState({
+        isConnected: true,
+        isDemoMode: true,
+        userInfo: {
+          uid: 2,
+          name: 'Marc Demo (Sandbox)',
+          serverVersion: 'Odoo 17.0 Enterprise (Sandbox)'
+        },
+        latencyMs: 14
+      });
+    }
+  }, [odooCredentials, isDemoMode]);
 
   // Data & Table State
   const [records, setRecords] = useState<Record<string, any>[]>([]);
@@ -93,6 +133,7 @@ export default function App() {
   // Modals
   const [isConnectionModalOpen, setIsConnectionModalOpen] = useState<boolean>(false);
   const [isCustomModelModalOpen, setIsCustomModelModalOpen] = useState<boolean>(false);
+  const [isSecurityModalOpen, setIsSecurityModalOpen] = useState<boolean>(false);
 
   // Toast / Alert
   const [toastMessage, setToastMessage] = useState<{ text: string; type: 'info' | 'success' | 'warning' } | null>(null);
@@ -180,6 +221,21 @@ export default function App() {
     );
   };
 
+  // If Firebase is checking authentication state
+  if (authLoading) {
+    return (
+      <div className="min-h-screen w-full flex flex-col items-center justify-center bg-slate-950 text-white space-y-4">
+        <div className="w-10 h-10 border-4 border-purple-500/30 border-t-purple-500 rounded-full animate-spin" />
+        <p className="text-xs text-slate-400 font-medium">Chargement de votre session sécurisée...</p>
+      </div>
+    );
+  }
+
+  // If user is not logged in and not in sandbox demo mode, display LoginPage
+  if (!currentUser && !isDemoMode) {
+    return <LoginPage onExploreDemo={() => setDemoMode(true)} />;
+  }
+
   return (
     <div className="min-h-screen bg-slate-100 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col font-sans transition-colors">
       
@@ -197,6 +253,10 @@ export default function App() {
         onRefreshData={() => handleRefresh(true)}
         isRefreshing={isLoading}
         cacheInfo={cacheInfo}
+        userEmail={currentUser?.email}
+        userName={currentUser?.displayName}
+        onOpenSecurity={() => setIsSecurityModalOpen(true)}
+        onLogout={currentUser ? logout : undefined}
       />
 
       {/* Main Content Area */}
@@ -222,12 +282,14 @@ export default function App() {
               </div>
             </div>
 
-            <button
-              onClick={() => setIsConnectionModalOpen(true)}
-              className="px-3.5 py-2 text-xs font-semibold rounded-xl bg-purple-600 hover:bg-purple-700 text-white shadow-xs transition-all whitespace-nowrap cursor-pointer shrink-0"
-            >
-              Connecter mon Odoo
-            </button>
+            <div className="flex items-center space-x-2">
+              <button
+                onClick={() => setIsConnectionModalOpen(true)}
+                className="px-3.5 py-2 text-xs font-semibold rounded-xl bg-purple-600 hover:bg-purple-700 text-white shadow-xs transition-all whitespace-nowrap cursor-pointer shrink-0"
+              >
+                Connecter mon Odoo
+              </button>
+            </div>
           </div>
         )}
 
@@ -328,6 +390,12 @@ export default function App() {
         onSelectCustomModel={handleSelectCustomModel}
       />
 
+      {/* User Security & Profile Modal */}
+      <SecurityModal
+        isOpen={isSecurityModalOpen}
+        onClose={() => setIsSecurityModalOpen(false)}
+      />
+
       {/* Floating Toast Notification */}
       {toastMessage && (
         <div className="fixed bottom-5 right-5 z-50 animate-in slide-in-from-bottom-3 duration-200">
@@ -343,5 +411,13 @@ export default function App() {
       )}
 
     </div>
+  );
+}
+
+export default function App() {
+  return (
+    <AuthProvider>
+      <MainDashboard />
+    </AuthProvider>
   );
 }

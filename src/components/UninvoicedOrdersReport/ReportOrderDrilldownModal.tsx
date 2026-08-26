@@ -4,6 +4,7 @@ import {
   Clock, 
   Receipt, 
   TrendingUp, 
+  TrendingDown,
   User, 
   Calendar, 
   Building2, 
@@ -187,15 +188,25 @@ export const ReportOrderDrilldownModal: React.FC<ReportOrderDrilldownModalProps>
                   </div>
                 </div>
 
-                <div className="p-3.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800/60">
-                  <div className="text-xs font-medium text-emerald-700 dark:text-emerald-400 flex items-center gap-1">
-                    <TrendingUp className="w-3.5 h-3.5" />
+                <div className={`p-3.5 rounded-xl border ${
+                  order.grossMargin < 0 
+                    ? 'bg-rose-50 dark:bg-rose-950/30 border-rose-200 dark:border-rose-800/60' 
+                    : 'bg-emerald-50 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-800/60'
+                }`}>
+                  <div className={`text-xs font-medium flex items-center gap-1 ${
+                    order.grossMargin < 0 ? 'text-rose-700 dark:text-rose-400' : 'text-emerald-700 dark:text-emerald-400'
+                  }`}>
+                    {order.grossMargin < 0 ? <TrendingDown className="w-3.5 h-3.5" /> : <TrendingUp className="w-3.5 h-3.5" />}
                     <span>4. Marge Brute Estimée</span>
                   </div>
-                  <div className="text-lg font-bold text-emerald-700 dark:text-emerald-300 mt-1">
+                  <div className={`text-lg font-bold mt-1 ${
+                    order.grossMargin < 0 ? 'text-rose-700 dark:text-rose-300' : 'text-emerald-700 dark:text-emerald-300'
+                  }`}>
                     {formatCurrency(order.grossMargin)}
                   </div>
-                  <div className="text-[10px] text-emerald-700 dark:text-emerald-400 mt-1 font-semibold">
+                  <div className={`text-[10px] mt-1 font-semibold ${
+                    order.grossMargin < 0 ? 'text-rose-700 dark:text-rose-400' : 'text-emerald-700 dark:text-emerald-400'
+                  }`}>
                     Taux : {order.marginRate}% (Total Coûts: {formatCurrency(order.totalPurchases)})
                   </div>
                 </div>
@@ -256,8 +267,10 @@ export const ReportOrderDrilldownModal: React.FC<ReportOrderDrilldownModalProps>
                   </div>
                   <div>
                     <span className="text-slate-500 dark:text-slate-400 block">Marge par heure</span>
-                    <span className="font-semibold text-emerald-600 dark:text-emerald-400 mt-0.5 block">
-                      {order.hourlyMarginRate ? `${formatCurrency(order.hourlyMarginRate)} / h` : '—'}
+                    <span className={`font-semibold mt-0.5 block ${
+                      (order.hourlyMarginRate || 0) < 0 ? 'text-rose-600 dark:text-rose-400' : 'text-emerald-600 dark:text-emerald-400'
+                    }`}>
+                      {order.hourlyMarginRate !== undefined ? `${formatCurrency(order.hourlyMarginRate)} / h` : '—'}
                     </span>
                   </div>
                 </div>

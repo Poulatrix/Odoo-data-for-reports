@@ -10,48 +10,34 @@ const STORAGE_KEY_CREDS = 'odoo_saas_credentials_v1';
 const STORAGE_KEY_DEMO = 'odoo_saas_is_demo_v1';
 
 class OdooClientService {
-  // Simple obfuscation for local credential persistence
-  private encodeCreds(creds: OdooConnectionCredentials): string {
-    try {
-      return btoa(unescape(encodeURIComponent(JSON.stringify(creds))));
-    } catch {
-      return '';
-    }
-  }
+  private inMemoryCreds: OdooConnectionCredentials | null = null;
+  private inMemoryDemo: boolean = false;
 
-  private decodeCreds(encoded: string): OdooConnectionCredentials | null {
-    try {
-      const decoded = decodeURIComponent(escape(atob(encoded)));
-      return JSON.parse(decoded);
-    } catch {
-      return null;
-    }
+  public setRuntimeCredentials(creds: OdooConnectionCredentials | null, isDemo: boolean = false) {
+    this.inMemoryCreds = creds;
+    this.inMemoryDemo = isDemo;
   }
 
   public getSavedCredentials(): OdooConnectionCredentials | null {
-    const raw = localStorage.getItem(STORAGE_KEY_CREDS);
-    if (!raw) return null;
-    return this.decodeCreds(raw);
+    return this.inMemoryCreds;
   }
 
   public saveCredentials(creds: OdooConnectionCredentials): void {
-    localStorage.setItem(STORAGE_KEY_CREDS, this.encodeCreds(creds));
-    localStorage.setItem(STORAGE_KEY_DEMO, 'false');
+    this.inMemoryCreds = creds;
+    this.inMemoryDemo = false;
   }
 
   public clearCredentials(): void {
-    localStorage.removeItem(STORAGE_KEY_CREDS);
-    localStorage.setItem(STORAGE_KEY_DEMO, 'true');
+    this.inMemoryCreds = null;
+    this.inMemoryDemo = true;
   }
 
   public isDemoMode(): boolean {
-    const saved = localStorage.getItem(STORAGE_KEY_DEMO);
-    if (saved === null) return true; // Default to demo mode for instant onboarding
-    return saved === 'true';
+    return this.inMemoryDemo;
   }
 
   public setDemoMode(isDemo: boolean): void {
-    localStorage.setItem(STORAGE_KEY_DEMO, isDemo ? 'true' : 'false');
+    this.inMemoryDemo = isDemo;
   }
 
   // Test connection to Odoo backend API
