@@ -345,10 +345,12 @@ export const ConnectionModal: React.FC<ConnectionModalProps> = ({
                     <p className="font-semibold">
                       {testResult.success ? 'Connexion à Odoo validée avec succès !' : 'Échec du test de connexion'}
                     </p>
-                    <p className="text-[11px] opacity-90">
+                    <p className="text-[11px] opacity-90 leading-relaxed">
                       {testResult.success
                         ? `Version détectée : ${testResult.serverVersion || 'Odoo ERP'} • UID utilisateur : ${testResult.uid} • Temps de réponse : ${testResult.latencyMs}ms`
-                        : testResult.error}
+                        : (typeof testResult.error === 'object'
+                            ? ((testResult.error as any)?.message || JSON.stringify(testResult.error))
+                            : (testResult.error || 'Impossible de contacter le serveur Odoo. Vérifiez l\'URL et vos identifiants.'))}
                     </p>
                   </div>
                 </div>

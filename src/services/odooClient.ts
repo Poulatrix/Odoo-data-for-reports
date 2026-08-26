@@ -44,8 +44,18 @@ async function safeFetchJson<T>(url: string, bodyPayload: any): Promise<T> {
   }
 
   const data = await res.json();
-  if (!res.ok && data?.error) {
-    throw new Error(data.error);
+  if (!res.ok) {
+    let errorMsg = 'Erreur lors de la communication avec le serveur.';
+    if (data?.error) {
+      if (typeof data.error === 'string') {
+        errorMsg = data.error;
+      } else if (typeof data.error === 'object') {
+        errorMsg = data.error.message || data.error.data?.message || JSON.stringify(data.error);
+      }
+    } else if (data?.message) {
+      errorMsg = typeof data.message === 'string' ? data.message : JSON.stringify(data.message);
+    }
+    throw new Error(errorMsg);
   }
 
   return data as T;

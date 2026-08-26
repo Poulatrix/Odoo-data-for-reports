@@ -283,6 +283,56 @@ class OdooBackendService {
     return json.result;
   }
 
+  // Helper to cleanly extract string message from any error object (XML-RPC fault, JSON-RPC, Error, Fetch)
+  public extractErrorMessage(err: any): string {
+    if (!err) return 'Erreur inconnue';
+    if (typeof err === 'string') return err;
+    if (err.faultString && typeof err.faultString === 'string') return err.faultString;
+    if (err.message && typeof err.message === 'string') return err.message;
+    if (err.data?.message && typeof err.data.message === 'string') return err.data.message;
+    if (err.data?.name && typeof err.data.name === 'string') return err.data.name;
+    if (err.error?.message && typeof err.error.message === 'string') return err.error.message;
+    if (err.error?.data?.message && typeof err.error.data.message === 'string') return err.error.data.message;
+    if (err.statusText) return `Erreur HTTP ${err.status || ''}: ${err.statusText}`;
+    try {
+      const jsonStr = JSON.stringify(err);
+      return jsonStr !== '{}' ? jsonStr : String(err);
+    } catch {
+      return String(err);
+    }
+  }
+
+  // Format any raw Odoo error into a clean, human-readable message
+  public formatOdooError(err: any, creds: OdooConnectionCredentials): Error {
+    const rawMsg = this.extractErrorMessage(err);
+
+    if (rawMsg.includes('Unknown XML-RPC tag') || rawMsg.includes('TITLE') || rawMsg.includes('HTML') || rawMsg.includes('<!DOCTYPE')) {
+      return new Error(
+        `Le serveur Odoo à "${creds.url}" a renvoyé une page HTML au lieu d'une réponse API. Vérifiez que l'URL est bien l'adresse racine (ex: https://votre-instance.odoo.com) et que le protocole https:// est correct.`
+      );
+    }
+
+    if (rawMsg.includes('Invalid field')) {
+      const match = rawMsg.match(/Invalid field ['"]?([^'"]+)['"]?/i);
+      const fieldName = match ? match[1] : 'inconnu';
+      return new Error(`Le champ technique '${fieldName}' n'existe pas sur ce modèle Odoo pour votre version.`);
+    }
+
+    if (rawMsg.includes('ENOTFOUND') || rawMsg.includes('ECONNREFUSED') || rawMsg.includes('fetch failed')) {
+      return new Error(`Impossible d'accéder au serveur Odoo à "${creds.url}". Vérifiez l'adresse de votre instance et votre réseau.`);
+    }
+
+    if (rawMsg.includes('AccessDenied') || rawMsg.includes('Access Denied') || rawMsg.includes('cannot be authenticated') || rawMsg.includes('wrong password') || rawMsg.includes('Wrong login')) {
+      return new Error(`Authentification Odoo refusée : vérifiez le nom de la base '${creds.db}', l'identifiant '${creds.username}' et la clé d'API.`);
+    }
+
+    if (rawMsg.includes('does not exist') || rawMsg.includes('database') && rawMsg.includes('not found')) {
+      return new Error(`La base de données Odoo "${creds.db}" n'existe pas ou n'est pas accessible sur cette instance.`);
+    }
+
+    return new Error(rawMsg);
+  }
+
   // Universal execute_kw wrapper with automatic XML-RPC -> JSON-RPC fallback
   public async executeKw(
     creds: OdooConnectionCredentials,
@@ -307,57 +357,22 @@ class OdooBackendService {
         kwargs
       ]);
     } catch (xmlErr: any) {
-      const msg = String(xmlErr?.message || xmlErr);
-      const isXmlTagError = msg.includes('Unknown XML-RPC tag') || msg.includes('TITLE') || msg.includes('HTML') || msg.includes('ECONNRESET');
-      
-      // If it looks like an XML parsing error, HTML redirect or protocol mismatch, try JSON-RPC fallback
-      if (isXmlTagError) {
-        console.warn(`XML-RPC failed (${msg}), attempting JSON-RPC fallback for ${model}.${method}...`);
-        try {
-          return await this.jsonRpcCall(cleanUrl, 'object', 'execute_kw', [
-            creds.db,
-            uid,
-            creds.apiKey,
-            model,
-            method,
-            args,
-            kwargs
-          ]);
-        } catch (jsonErr: any) {
-          console.error('JSON-RPC fallback also failed:', jsonErr);
-          throw this.formatOdooError(jsonErr, creds);
-        }
+      console.warn(`XML-RPC execution failed for ${model}.${method}, attempting JSON-RPC fallback...`, this.extractErrorMessage(xmlErr));
+      try {
+        return await this.jsonRpcCall(cleanUrl, 'object', 'execute_kw', [
+          creds.db,
+          uid,
+          creds.apiKey,
+          model,
+          method,
+          args,
+          kwargs
+        ]);
+      } catch (jsonErr: any) {
+        console.error('JSON-RPC fallback execution also failed:', jsonErr);
+        throw this.formatOdooError(jsonErr, creds);
       }
-      
-      throw this.formatOdooError(xmlErr, creds);
     }
-  }
-
-  // Format any raw Odoo error into a clean, human-readable message
-  private formatOdooError(err: any, creds: OdooConnectionCredentials): Error {
-    const rawMsg = String(err?.message || err || '');
-
-    if (rawMsg.includes('Unknown XML-RPC tag') || rawMsg.includes('TITLE') || rawMsg.includes('HTML')) {
-      return new Error(
-        `Le serveur Odoo à "${creds.url}" a renvoyé une page HTML au lieu d'une réponse API. Vérifiez que l'URL est bien l'adresse racine (ex: https://votre-instance.odoo.com) et que le protocole https:// est correct.`
-      );
-    }
-
-    if (rawMsg.includes('Invalid field')) {
-      const match = rawMsg.match(/Invalid field ['"]?([^'"]+)['"]?/i);
-      const fieldName = match ? match[1] : 'inconnu';
-      return new Error(`Le champ technique '${fieldName}' n'existe pas sur ce modèle Odoo pour votre version.`);
-    }
-
-    if (rawMsg.includes('ENOTFOUND') || rawMsg.includes('ECONNREFUSED')) {
-      return new Error(`Impossible d'accéder au serveur Odoo à "${creds.url}". Vérifiez l'adresse et votre connexion réseau.`);
-    }
-
-    if (rawMsg.includes('AccessDenied') || rawMsg.includes('Access Denied') || rawMsg.includes('cannot be authenticated')) {
-      return new Error(`Authentification Odoo refusée : vérifiez la base '${creds.db}', l'identifiant '${creds.username}' et la clé d'API.`);
-    }
-
-    return new Error(rawMsg);
   }
 
   // Test Authentication against real Odoo instance (supports XML-RPC and JSON-RPC)
@@ -373,6 +388,7 @@ class OdooBackendService {
     const cleanUrl = this.sanitizeUrl(creds.url);
 
     // 1. Try XML-RPC authentication
+    let xmlRpcErr: any = null;
     try {
       const commonClient = this.createXmlRpcClient(cleanUrl, '/xmlrpc/2/common');
       
@@ -380,7 +396,7 @@ class OdooBackendService {
       try {
         versionInfo = await this.xmlRpcMethodCall(commonClient, 'version', []);
       } catch (verErr) {
-        console.warn('Odoo version check XML-RPC non-fatal warning:', verErr);
+        console.warn('Odoo version check XML-RPC notice:', verErr);
       }
 
       const uid = await this.xmlRpcMethodCall(commonClient, 'authenticate', [
@@ -392,72 +408,60 @@ class OdooBackendService {
 
       const latencyMs = Date.now() - startTime;
 
-      if (!uid || uid === false || typeof uid !== 'number') {
+      if (typeof uid === 'number' && uid > 0) {
+        return {
+          success: true,
+          uid,
+          serverVersion: versionInfo?.server_version || 'Odoo Enterprise / Community',
+          serverVersionInfo: versionInfo?.server_version_info || [],
+          latencyMs
+        };
+      } else {
+        xmlRpcErr = new Error('Identifiants invalides : Odoo a rejeté l\'email, le nom de base de données ou la clé d\'API.');
+      }
+    } catch (err: any) {
+      xmlRpcErr = err;
+    }
+
+    // 2. Automatic JSON-RPC Fallback (works across all standard Odoo setups including HTTPS reverse proxies)
+    console.log('Attempting JSON-RPC authentication fallback for Odoo...');
+    try {
+      let versionInfo: any = {};
+      try {
+        versionInfo = await this.jsonRpcCall(cleanUrl, 'common', 'version', []);
+      } catch {}
+
+      const uid = await this.jsonRpcCall(cleanUrl, 'common', 'authenticate', [
+        creds.db,
+        creds.username,
+        creds.apiKey,
+        {}
+      ]);
+
+      const latencyMs = Date.now() - startTime;
+
+      if (typeof uid === 'number' && uid > 0) {
+        return {
+          success: true,
+          uid,
+          serverVersion: versionInfo?.server_version || 'Odoo Enterprise / Community (JSON-RPC)',
+          serverVersionInfo: versionInfo?.server_version_info || [],
+          latencyMs
+        };
+      } else {
         return {
           success: false,
           latencyMs,
-          error: 'Identifiants invalides : Odoo a rejeté l\'email, le nom de base de données ou la clé d\'API.'
+          error: 'Authentification Odoo refusée : vérifiez la base de données, l\'email utilisateur et la clé d\'API.'
         };
       }
-
-      return {
-        success: true,
-        uid,
-        serverVersion: versionInfo.server_version || 'Odoo Standard',
-        serverVersionInfo: versionInfo.server_version_info || [],
-        latencyMs
-      };
-    } catch (err: any) {
-      const msg = String(err?.message || err);
-      
-      // If XML-RPC had HTML or tag parsing error, attempt JSON-RPC
-      if (msg.includes('Unknown XML-RPC tag') || msg.includes('TITLE') || msg.includes('HTML')) {
-        console.log('XML-RPC returned HTML, attempting JSON-RPC authentication fallback...');
-        try {
-          let versionInfo: any = {};
-          try {
-            versionInfo = await this.jsonRpcCall(cleanUrl, 'common', 'version', []);
-          } catch {}
-
-          const uid = await this.jsonRpcCall(cleanUrl, 'common', 'authenticate', [
-            creds.db,
-            creds.username,
-            creds.apiKey,
-            {}
-          ]);
-
-          const latencyMs = Date.now() - startTime;
-
-          if (!uid || uid === false || typeof uid !== 'number') {
-            return {
-              success: false,
-              latencyMs,
-              error: 'Identifiants invalides : Odoo a rejeté l\'email, le nom de base de données ou la clé d\'API.'
-            };
-          }
-
-          return {
-            success: true,
-            uid,
-            serverVersion: versionInfo?.server_version || 'Odoo Standard (JSON-RPC)',
-            serverVersionInfo: versionInfo?.server_version_info || [],
-            latencyMs
-          };
-        } catch (jsonErr: any) {
-          const latencyMs = Date.now() - startTime;
-          return {
-            success: false,
-            latencyMs,
-            error: this.formatOdooError(jsonErr, creds).message
-          };
-        }
-      }
-
+    } catch (jsonErr: any) {
       const latencyMs = Date.now() - startTime;
+      const finalError = this.formatOdooError(jsonErr || xmlRpcErr, creds);
       return {
         success: false,
         latencyMs,
-        error: this.formatOdooError(err, creds).message
+        error: finalError.message
       };
     }
   }

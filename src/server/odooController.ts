@@ -97,11 +97,12 @@ export async function handleOdooRequest(payload: OdooProxyRequest, actionOverrid
 
         const result = await odooBackendService.testConnection(credentials);
         if (!result.success) {
+          const errorStr = odooBackendService.extractErrorMessage(result.error) || 'Impossible de contacter le serveur Odoo. Vérifiez l\'URL et vos identifiants.';
           return {
             status: 400,
             body: {
               success: false,
-              error: result.error || 'Impossible de contacter le serveur Odoo. Vérifiez l\'URL et vos identifiants.',
+              error: errorStr,
               latencyMs: result.latencyMs
             }
           };
