@@ -283,6 +283,49 @@ export async function handleOdooRequest(payload: OdooProxyRequest, actionOverrid
         };
       }
 
+      case 'report/mould-weight-check':
+      case 'report/weight-check':
+      case 'mould-weight-check':
+      case 'weight-check': {
+        const forceRefresh = Boolean(payload.forceRefresh);
+
+        if (isDemo || !credentials || !credentials.url) {
+          const mockResult = odooBackendService.getMockMouldWeightCheckReport();
+          return {
+            status: 200,
+            body: {
+              success: true,
+              records: mockResult.records,
+              totalCount: mockResult.totalCount,
+              summary: mockResult.summary,
+              fromCache: false,
+              executionTimeMs: mockResult.executionTimeMs,
+              timestamp: new Date().toISOString(),
+              isDemo: true
+            }
+          };
+        }
+
+        const result = await odooBackendService.getMouldWeightCheckReport(
+          credentials,
+          forceRefresh
+        );
+
+        return {
+          status: 200,
+          body: {
+            success: true,
+            records: result.records,
+            totalCount: result.totalCount,
+            summary: result.summary,
+            fromCache: result.fromCache,
+            executionTimeMs: result.executionTimeMs,
+            timestamp: new Date().toISOString(),
+            isDemo: false
+          }
+        };
+      }
+
       default: {
         return {
           status: 400,

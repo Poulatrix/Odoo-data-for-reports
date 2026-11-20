@@ -1,7 +1,12 @@
 import { 
   OdooConnectionCredentials, 
   OdooSearchReadResponse, 
-  UninvoicedReportResponse 
+  UninvoicedReportResponse,
+  TimesheetAuditReportResponse,
+  MouldWeightCheckReportResponse,
+  BillingReportResponse,
+  WipOutflowReportResponse,
+  WipPurchasesInflowReportResponse
 } from '../types/odoo';
 
 /**
@@ -213,6 +218,200 @@ class OdooClientService {
           averageMarginRate: 0,
           totalValuation77_76: 0,
           totalValuation90: 0
+        },
+        timestamp: new Date().toISOString(),
+        error: err.message || 'Impossible de contacter le serveur Odoo. Vérifiez l\'URL.'
+      };
+    }
+  }
+
+  // Specialized Report: Contrôle des Pointages / Suivi de la Saisie des Heures
+  public async getTimesheetsAuditReport(params: {
+    startDate?: string;
+    endDate?: string;
+    thresholdHours?: number;
+    hideWeekends?: boolean;
+    employeeIds?: number[];
+    forceRefresh?: boolean;
+    credentials?: OdooConnectionCredentials;
+    isDemo?: boolean;
+  }): Promise<TimesheetAuditReportResponse> {
+    try {
+      const payload = {
+        action: 'report/timesheets-audit',
+        startDate: params.startDate,
+        endDate: params.endDate,
+        thresholdHours: params.thresholdHours,
+        hideWeekends: params.hideWeekends,
+        employeeIds: params.employeeIds,
+        forceRefresh: params.forceRefresh || false,
+        credentials: params.credentials,
+        isDemo: params.isDemo
+      };
+
+      return await safeFetchJson<TimesheetAuditReportResponse>('/api/odoo', payload);
+    } catch (err: any) {
+      return {
+        success: false,
+        records: [],
+        totalCount: 0,
+        summary: {
+          totalEmployees: 0,
+          employeesWithMissingDays: 0,
+          employeesFullyCompliant: 0,
+          totalMissingDays: 0,
+          totalIncompleteDays: 0,
+          totalRecordedHours: 0,
+          totalExpectedHours: 0,
+          overallComplianceRate: 0,
+          businessDaysCount: 0,
+          dateList: []
+        },
+        startDate: params.startDate || '',
+        endDate: params.endDate || '',
+        thresholdHours: params.thresholdHours || 7.0,
+        hideWeekends: params.hideWeekends !== false,
+        timestamp: new Date().toISOString(),
+        error: err.message || 'Impossible de contacter le serveur Odoo. Vérifiez l\'URL.'
+      };
+    }
+  }
+
+  // Specialized Report: Vérification du Poids (Moules Neufs)
+  public async getMouldWeightCheckReport(params: {
+    forceRefresh?: boolean;
+    credentials?: OdooConnectionCredentials;
+    isDemo?: boolean;
+  }): Promise<MouldWeightCheckReportResponse> {
+    try {
+      const payload = {
+        action: 'report/mould-weight-check',
+        forceRefresh: params.forceRefresh || false,
+        credentials: params.credentials,
+        isDemo: params.isDemo
+      };
+
+      return await safeFetchJson<MouldWeightCheckReportResponse>('/api/odoo', payload);
+    } catch (err: any) {
+      return {
+        success: false,
+        records: [],
+        totalCount: 0,
+        summary: {
+          totalOrdersCount: 0,
+          totalProductsCount: 0,
+          anomaliesCount: 0,
+          compliantCount: 0,
+          complianceRate: 100
+        },
+        timestamp: new Date().toISOString(),
+        error: err.message || 'Impossible de contacter le serveur Odoo. Vérifiez l\'URL.'
+      };
+    }
+  }
+
+  // Specialized Report: Bilan de la Facturation (Ventes & Achats)
+  public async getBillingReport(params: {
+    forceRefresh?: boolean;
+    credentials?: OdooConnectionCredentials;
+    isDemo?: boolean;
+  }): Promise<BillingReportResponse> {
+    try {
+      const payload = {
+        action: 'report/billing-summary',
+        forceRefresh: params.forceRefresh || false,
+        credentials: params.credentials,
+        isDemo: params.isDemo
+      };
+
+      return await safeFetchJson<BillingReportResponse>('/api/odoo', payload);
+    } catch (err: any) {
+      return {
+        success: false,
+        monthlySummaries: [],
+        dossiers: [],
+        summary: {
+          totalSalesUntaxed: 0,
+          totalSalesTotal: 0,
+          totalPurchasesUntaxed: 0,
+          totalPurchasesTotal: 0,
+          totalNetMarginUntaxed: 0,
+          overallMarginRate: 0,
+          totalSalesInvoicesCount: 0,
+          totalPurchasesBillsCount: 0,
+          totalDossiersCount: 0
+        },
+        timestamp: new Date().toISOString(),
+        error: err.message || 'Impossible de contacter le serveur Odoo. Vérifiez l\'URL.'
+      };
+    }
+  }
+
+  // Specialized Report: Sorties d'Encours Achats (Achats des Ventes Facturées)
+  public async getWipPurchasesOutflowReport(params: {
+    monthKey?: string;
+    forceRefresh?: boolean;
+    credentials?: OdooConnectionCredentials;
+    isDemo?: boolean;
+  }): Promise<WipOutflowReportResponse> {
+    try {
+      const payload = {
+        action: 'report/wip-purchases-outflow',
+        monthKey: params.monthKey,
+        forceRefresh: params.forceRefresh || false,
+        credentials: params.credentials,
+        isDemo: params.isDemo
+      };
+
+      return await safeFetchJson<WipOutflowReportResponse>('/api/odoo', payload);
+    } catch (err: any) {
+      return {
+        success: false,
+        records: [],
+        summary: {
+          selectedMonthKey: params.monthKey || '',
+          selectedMonthLabel: params.monthKey || '',
+          totalInvoicesCount: 0,
+          totalOrdersCount: 0,
+          totalInvoicedSalesUntaxed: 0,
+          totalPurchasesOutflowUntaxed: 0,
+          totalGrossMarginUntaxed: 0,
+          overallMarginRate: 0,
+          availableMonths: []
+        },
+        timestamp: new Date().toISOString(),
+        error: err.message || 'Impossible de contacter le serveur Odoo. Vérifiez l\'URL.'
+      };
+    }
+  }
+
+  // Specialized Report / Widget: Augmentation de l'Encours (Achats engagés non facturés du mois)
+  public async getWipPurchasesInflowReport(params: {
+    monthKey?: string;
+    forceRefresh?: boolean;
+    credentials?: OdooConnectionCredentials;
+    isDemo?: boolean;
+  }): Promise<WipPurchasesInflowReportResponse> {
+    try {
+      const payload = {
+        action: 'report/wip-purchases-inflow',
+        monthKey: params.monthKey,
+        forceRefresh: params.forceRefresh || false,
+        credentials: params.credentials,
+        isDemo: params.isDemo
+      };
+
+      return await safeFetchJson<WipPurchasesInflowReportResponse>('/api/odoo', payload);
+    } catch (err: any) {
+      return {
+        success: false,
+        records: [],
+        summary: {
+          selectedMonthKey: params.monthKey || '',
+          selectedMonthLabel: params.monthKey || '',
+          totalEligibleOrdersCount: 0,
+          totalPurchasesInflowUntaxed: 0,
+          availableMonths: []
         },
         timestamp: new Date().toISOString(),
         error: err.message || 'Impossible de contacter le serveur Odoo. Vérifiez l\'URL.'

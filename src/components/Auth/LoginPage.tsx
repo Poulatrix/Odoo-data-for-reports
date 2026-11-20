@@ -135,15 +135,19 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onExploreDemo }) => {
       <div className="w-full max-w-md relative z-10">
         
         {/* Brand Header */}
-        <div className="text-center mb-6 space-y-2">
-          <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-gradient-to-tr from-purple-700 to-indigo-600 text-white shadow-xl shadow-purple-900/30 ring-1 ring-white/20">
-            <Database className="w-7 h-7" />
+        <div className="text-center mb-6 space-y-2.5">
+          <div className="mx-auto w-52 h-[92px] rounded-2xl bg-white shadow-2xl shadow-sky-950/40 ring-1 ring-white/20 overflow-hidden flex items-center justify-center">
+            <img
+              src="/assets/aistudio/odoo-data-report_0b974500.png"
+              alt="Logo Odoo Data Report - Ecomi Drive"
+              className="w-full h-full object-cover object-center"
+            />
           </div>
           <h1 className="text-2xl font-black tracking-tight text-white">
-            Odoo Business Intelligence
+            Ecomi <span className="text-sky-400">Drive</span>
           </h1>
-          <p className="text-xs text-slate-400 max-w-xs mx-auto">
-            Plateforme d'analyse et de pilotage décisionnel Odoo sécurisée avec chiffrement et persistance cloud.
+          <p className="text-xs text-sky-300/80 font-medium max-w-xs mx-auto italic">
+            "Accroche-toi à ta culotte, c'est moi qui pilote !"
           </p>
         </div>
 

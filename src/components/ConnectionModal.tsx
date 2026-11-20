@@ -13,7 +13,9 @@ import {
   ShieldCheck, 
   ExternalLink,
   ChevronRight,
-  Server
+  Server,
+  Activity,
+  Wifi
 } from 'lucide-react';
 import { OdooConnectionCredentials, OdooConnectionState } from '../types/odoo';
 import { odooClient } from '../services/odooClient';
@@ -171,8 +173,12 @@ export const ConnectionModal: React.FC<ConnectionModalProps> = ({
         {/* Modal Header */}
         <div className="px-6 py-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between bg-slate-50/50 dark:bg-slate-900/50">
           <div className="flex items-center space-x-3">
-            <div className="p-2 rounded-xl bg-purple-100 dark:bg-purple-950 text-purple-600 dark:text-purple-400">
-              <Server className="w-5 h-5" />
+            <div className="w-[82px] h-[36px] rounded-xl bg-white border border-slate-200/90 dark:border-slate-700 shadow-2xs overflow-hidden shrink-0 flex items-center justify-center">
+              <img
+                src="/assets/aistudio/odoo-data-report_0b974500.png"
+                alt="Logo Odoo Data Report"
+                className="w-full h-full object-cover object-center"
+              />
             </div>
             <div>
               <h2 className="text-base font-bold text-slate-900 dark:text-white">
@@ -220,6 +226,78 @@ export const ConnectionModal: React.FC<ConnectionModalProps> = ({
 
         {/* Content Area */}
         <div className="p-6 overflow-y-auto space-y-5 flex-1">
+          
+          {/* Current Connection Status & Ping Overview Card */}
+          <div className={`p-4 rounded-2xl border transition-all ${
+            connectionState.isDemoMode
+              ? 'bg-amber-50/70 dark:bg-amber-950/30 border-amber-200 dark:border-amber-800/60'
+              : connectionState.isConnected
+              ? 'bg-emerald-50/70 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-800/60'
+              : 'bg-rose-50/70 dark:bg-rose-950/30 border-rose-200 dark:border-rose-800/60'
+          }`}>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="flex items-center space-x-3">
+                <span className="relative flex h-3 w-3 shrink-0">
+                  <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${
+                    connectionState.isDemoMode ? 'bg-amber-400' : connectionState.isConnected ? 'bg-emerald-400' : 'bg-rose-400'
+                  }`}></span>
+                  <span className={`relative inline-flex rounded-full h-3 w-3 ${
+                    connectionState.isDemoMode ? 'bg-amber-500' : connectionState.isConnected ? 'bg-emerald-500' : 'bg-rose-500'
+                  }`}></span>
+                </span>
+                <div>
+                  <div className="flex items-center space-x-2">
+                    <h3 className="text-xs font-bold text-slate-900 dark:text-white">
+                      {connectionState.isDemoMode 
+                        ? 'Mode Démo Sandbox Actif' 
+                        : connectionState.isConnected 
+                        ? 'Instance Odoo Connectée & Opérationnelle' 
+                        : 'Aucune Connexion Odoo Active'}
+                    </h3>
+                    <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold ${
+                      connectionState.isDemoMode
+                        ? 'bg-amber-100 dark:bg-amber-900/60 text-amber-800 dark:text-amber-300'
+                        : connectionState.isConnected
+                        ? 'bg-emerald-100 dark:bg-emerald-900/60 text-emerald-800 dark:text-emerald-300'
+                        : 'bg-rose-100 dark:bg-rose-900/60 text-rose-800 dark:text-rose-300'
+                    }`}>
+                      {connectionState.isDemoMode ? 'Sandbox v17' : connectionState.isConnected ? 'Live XML-RPC' : 'Hors-ligne'}
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-slate-600 dark:text-slate-400 mt-0.5">
+                    {connectionState.isDemoMode 
+                      ? 'Environnement de simulation avec données d\'exemple Ecomi.' 
+                      : connectionState.isConnected
+                      ? `Connecté en tant que ${connectionState.credentials?.username || 'Utilisateur'} (${connectionState.userInfo?.serverVersion || 'Odoo Standard'})`
+                      : 'Veuillez saisir vos identifiants ci-dessous pour interroger votre ERP en temps réel.'}
+                  </p>
+                </div>
+              </div>
+
+              {/* Status Metrics (URL, DB, Latency) */}
+              <div className="flex items-center flex-wrap gap-2 text-xs">
+                {connectionState.credentials?.url && (
+                  <div className="px-2.5 py-1 rounded-xl bg-white/80 dark:bg-slate-800/80 border border-slate-200/80 dark:border-slate-700/80 flex items-center space-x-1.5 text-slate-700 dark:text-slate-300 text-[11px]">
+                    <Globe className="w-3 h-3 text-purple-600 dark:text-purple-400" />
+                    <span className="font-mono">{connectionState.credentials.url.replace(/^https?:\/\//, '')}</span>
+                  </div>
+                )}
+                {connectionState.credentials?.db && (
+                  <div className="px-2.5 py-1 rounded-xl bg-white/80 dark:bg-slate-800/80 border border-slate-200/80 dark:border-slate-700/80 flex items-center space-x-1.5 text-slate-700 dark:text-slate-300 text-[11px]">
+                    <Database className="w-3 h-3 text-indigo-600 dark:text-indigo-400" />
+                    <span className="font-semibold">{connectionState.credentials.db}</span>
+                  </div>
+                )}
+                {connectionState.latencyMs !== undefined && (
+                  <div className="px-2.5 py-1 rounded-xl bg-white/80 dark:bg-slate-800/80 border border-slate-200/80 dark:border-slate-700/80 flex items-center space-x-1.5 text-emerald-700 dark:text-emerald-400 text-[11px]">
+                    <Activity className="w-3 h-3" />
+                    <span className="font-mono font-bold">{connectionState.latencyMs} ms</span>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+
           {activeTab === 'real' ? (
             <div className="space-y-4">
               

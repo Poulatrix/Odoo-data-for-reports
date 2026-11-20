@@ -5,25 +5,26 @@ import {
   RefreshCw, 
   Sun, 
   Moon, 
-  Layers, 
-  ExternalLink, 
-  Sparkles, 
-  CheckCircle2, 
-  AlertCircle,
-  Plus,
   FileSpreadsheet,
-  Table,
+  Clock,
+  Scale,
+  BarChart3,
+  LayoutDashboard,
+  PackageMinus,
+  Plus,
   User,
-  LogOut
+  LogOut,
+  Sparkles
 } from 'lucide-react';
+import { EcomiLogo } from './EcomiLogo';
 import { OdooModelConfig, OdooConnectionState } from '../types/odoo';
 import { SUPPORTED_MODELS } from '../data/odooModels';
 
 interface HeaderProps {
   currentModel: OdooModelConfig;
   onSelectModel: (model: OdooModelConfig) => void;
-  activeView: 'explorer' | 'report';
-  onSelectView: (view: 'explorer' | 'report') => void;
+  activeView: 'home' | 'report' | 'timesheets' | 'moulds' | 'billing' | 'wip-outflow' | 'explorer';
+  onSelectView: (view: 'home' | 'report' | 'timesheets' | 'moulds' | 'billing' | 'wip-outflow' | 'explorer') => void;
   connectionState: OdooConnectionState;
   onOpenSettings: () => void;
   onOpenCustomModel: () => void;
@@ -62,108 +63,28 @@ export const Header: React.FC<HeaderProps> = ({
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16">
           
-          {/* Logo & Brand & Main Mode Switcher */}
-          <div className="flex items-center space-x-6">
-            <div className="flex items-center space-x-3 cursor-pointer" onClick={() => onSelectView('explorer')}>
-              <div className="h-10 w-10 rounded-xl bg-gradient-to-tr from-purple-600 to-indigo-600 flex items-center justify-center shadow-md shadow-indigo-500/20 text-white font-bold text-lg">
-                <Database className="w-5 h-5" />
+          {/* Logo & Brand & Easter Egg */}
+          <div className="flex items-center space-x-3 cursor-pointer group" onClick={() => onSelectView('home')}>
+            <EcomiLogo size="md" showSubtitle={true} />
+            <div className="h-7 w-px bg-slate-200 dark:bg-slate-800 mx-1 hidden sm:block"></div>
+            <div className="hidden sm:flex flex-col justify-center">
+              <div className="flex items-center space-x-1.5">
+                <span className="text-xs font-bold tracking-tight text-[#0B2559] dark:text-blue-300">
+                  Portail Odoo
+                </span>
+                <span className="px-1.5 py-0.2 rounded text-[10px] font-semibold bg-[#0B2559]/10 text-[#0B2559] dark:bg-blue-950/60 dark:text-blue-300 border border-[#0B2559]/20">
+                  Live
+                </span>
               </div>
-              <div>
-                <div className="flex items-center space-x-2">
-                  <span className="text-lg font-bold tracking-tight text-slate-900 dark:text-white">
-                    Odoo<span className="text-purple-600 dark:text-purple-400">DataTable</span>
-                  </span>
-                  <span className="px-2 py-0.5 text-xs font-semibold rounded-full bg-purple-100 dark:bg-purple-950 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800">
-                    SaaS Pro
-                  </span>
-                </div>
-                <p className="text-xs text-slate-500 dark:text-slate-400 hidden sm:block">
-                  Explorateur et Tableaux de Bord Odoo XML-RPC / JSON-RPC
-                </p>
-              </div>
+              {/* RESTORED EASTER EGG TAGLINE */}
+              <p 
+                className="text-[10px] text-indigo-600 dark:text-indigo-300 font-semibold tracking-tight italic flex items-center gap-1 group-hover:text-blue-700 transition-colors"
+                title="« Accroche-toi à ta culotte, c'est moi qui pilote ! »"
+              >
+                <span>🚀</span>
+                <span>« Accroche-toi à ta culotte, c'est moi qui pilote ! »</span>
+              </p>
             </div>
-
-            {/* Main Tabs: Données vs Rapport */}
-            <nav className="hidden lg:flex items-center space-x-1 bg-slate-100 dark:bg-slate-800/60 p-1 rounded-xl border border-slate-200 dark:border-slate-700/60">
-              <button
-                id="main-tab-explorer"
-                onClick={() => onSelectView('explorer')}
-                className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
-                  activeView === 'explorer'
-                    ? 'bg-white dark:bg-slate-900 text-purple-700 dark:text-purple-300 shadow-xs'
-                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100'
-                }`}
-              >
-                <Table className="w-3.5 h-3.5" />
-                <span>Explorateur de Données</span>
-              </button>
-
-              <button
-                id="main-tab-report"
-                onClick={() => onSelectView('report')}
-                className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
-                  activeView === 'report'
-                    ? 'bg-white dark:bg-slate-900 text-purple-700 dark:text-purple-300 shadow-xs'
-                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100'
-                }`}
-              >
-                <FileSpreadsheet className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" />
-                <span>Rapport : Affaires à facturer</span>
-                <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-purple-100 dark:bg-purple-950 text-purple-700 dark:text-purple-300 font-bold uppercase">
-                  Nouveau
-                </span>
-              </button>
-            </nav>
-          </div>
-
-          {/* Center: Connection Status Pill */}
-          <div className="hidden md:flex items-center">
-            <button
-              id="connection-status-badge"
-              onClick={onOpenSettings}
-              className={`flex items-center space-x-2 px-3 py-1.5 rounded-full text-xs font-medium border transition-all cursor-pointer ${
-                connectionState.isDemoMode
-                  ? 'bg-amber-50 dark:bg-amber-950/50 border-amber-200 dark:border-amber-800/80 text-amber-800 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-900/50'
-                  : connectionState.isConnected
-                  ? 'bg-emerald-50 dark:bg-emerald-950/50 border-emerald-200 dark:border-emerald-800/80 text-emerald-800 dark:text-emerald-300 hover:bg-emerald-100 dark:hover:bg-emerald-900/50'
-                  : 'bg-rose-50 dark:bg-rose-950/50 border-rose-200 dark:border-rose-800/80 text-rose-800 dark:text-rose-300 hover:bg-rose-100 dark:hover:bg-rose-900/50'
-              }`}
-              title="Cliquer pour configurer l'instance Odoo"
-            >
-              <span className="relative flex h-2 w-2">
-                <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${
-                  connectionState.isDemoMode ? 'bg-amber-400' : connectionState.isConnected ? 'bg-emerald-400' : 'bg-rose-400'
-                }`}></span>
-                <span className={`relative inline-flex rounded-full h-2 w-2 ${
-                  connectionState.isDemoMode ? 'bg-amber-500' : connectionState.isConnected ? 'bg-emerald-500' : 'bg-rose-500'
-                }`}></span>
-              </span>
-
-              <span>
-                {connectionState.isDemoMode ? (
-                  <span className="flex items-center gap-1">
-                    <Sparkles className="w-3 h-3 text-amber-500" />
-                    <strong>Mode Démo</strong> (Odoo v17 Enterprise)
-                  </span>
-                ) : connectionState.isConnected ? (
-                  <span className="flex items-center gap-1">
-                    <CheckCircle2 className="w-3 h-3 text-emerald-500" />
-                    <strong>Connecté :</strong> {connectionState.credentials?.url.replace(/^https?:\/\//, '')} ({connectionState.credentials?.db})
-                  </span>
-                ) : (
-                  <span className="flex items-center gap-1">
-                    <AlertCircle className="w-3 h-3 text-rose-500" />
-                    Non connecté
-                  </span>
-                )}
-              </span>
-
-              {cacheInfo?.executionTimeMs !== undefined && (
-                <span className="text-[10px] text-slate-400 dark:text-slate-500 border-l border-slate-300 dark:border-slate-700 pl-1.5">
-                  {cacheInfo.fromCache ? 'Cache' : `${cacheInfo.executionTimeMs}ms`}
-                </span>
-              )}
-            </button>
           </div>
 
           {/* Right Action Tools */}
@@ -175,37 +96,73 @@ export const Header: React.FC<HeaderProps> = ({
               className="p-2 rounded-lg text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors border border-slate-200 dark:border-slate-700 cursor-pointer disabled:opacity-50"
               title="Rafraîchir les données (contourne le cache)"
             >
-              <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin text-purple-600' : ''}`} />
+              <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin text-[#0B2559] dark:text-blue-400' : ''}`} />
             </button>
 
-            <button
-              id="toggle-dark-mode-btn"
-              onClick={onToggleDarkMode}
-              className="p-2 rounded-lg text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors border border-slate-200 dark:border-slate-700 cursor-pointer"
-              title={isDarkMode ? 'Passer en thème clair' : 'Passer en thème sombre'}
+            {/* Bascule Mode Jour / Mode Nuit avec indicateur clair */}
+            <div 
+              className="flex items-center p-0.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800"
+              title={isDarkMode ? 'Mode Nuit actif (cliquer pour Mode Jour)' : 'Mode Jour actif (cliquer pour Mode Nuit)'}
             >
-              {isDarkMode ? <Sun className="w-4 h-4 text-amber-400" /> : <Moon className="w-4 h-4 text-slate-600" />}
-            </button>
+              <button
+                type="button"
+                id="toggle-light-mode-btn"
+                onClick={() => isDarkMode && onToggleDarkMode()}
+                className={`flex items-center space-x-1 px-2 py-1 rounded-md text-xs font-medium transition-all cursor-pointer ${
+                  !isDarkMode 
+                    ? 'bg-white text-amber-600 shadow-2xs font-semibold' 
+                    : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'
+                }`}
+                title="Passer en Mode Jour"
+              >
+                <Sun className={`w-3.5 h-3.5 ${!isDarkMode ? 'text-amber-500' : 'text-slate-400'}`} />
+                <span className="hidden md:inline text-[11px]">Jour</span>
+              </button>
+              <button
+                type="button"
+                id="toggle-dark-mode-btn"
+                onClick={() => !isDarkMode && onToggleDarkMode()}
+                className={`flex items-center space-x-1 px-2 py-1 rounded-md text-xs font-medium transition-all cursor-pointer ${
+                  isDarkMode 
+                    ? 'bg-slate-900 text-indigo-300 shadow-2xs font-semibold' 
+                    : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'
+                }`}
+                title="Passer en Mode Nuit"
+              >
+                <Moon className={`w-3.5 h-3.5 ${isDarkMode ? 'text-indigo-400' : 'text-slate-400'}`} />
+                <span className="hidden md:inline text-[11px]">Nuit</span>
+              </button>
+            </div>
 
+            {/* Bouton Paramètres Odoo avec indicateur discret de statut */}
             <button
               id="open-settings-btn"
               onClick={onOpenSettings}
-              className="flex items-center space-x-1.5 px-3 py-2 rounded-lg bg-slate-900 dark:bg-white text-white dark:text-slate-900 hover:bg-slate-800 dark:hover:bg-slate-100 font-medium text-xs shadow-sm transition-all cursor-pointer"
+              className="flex items-center space-x-2 px-3 py-2 rounded-lg bg-[#0B2559] hover:bg-[#07193D] dark:bg-blue-600 dark:hover:bg-blue-700 text-white font-medium text-xs shadow-xs transition-all cursor-pointer"
+              title={`Paramètres Odoo (${connectionState.isDemoMode ? 'Mode Démo Sandbox' : connectionState.isConnected ? 'Connecté' : 'Non connecté'})`}
             >
+              <span className="relative flex h-2 w-2">
+                <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${
+                  connectionState.isDemoMode ? 'bg-amber-400' : connectionState.isConnected ? 'bg-emerald-400' : 'bg-rose-400'
+                }`}></span>
+                <span className={`relative inline-flex rounded-full h-2 w-2 ${
+                  connectionState.isDemoMode ? 'bg-amber-500' : connectionState.isConnected ? 'bg-emerald-500' : 'bg-rose-500'
+                }`}></span>
+              </span>
               <Settings className="w-3.5 h-3.5" />
               <span>Paramètres Odoo</span>
             </button>
 
             {userEmail && (
-              <div className="hidden lg:flex items-center space-x-2 pl-2 border-l border-slate-200 dark:border-slate-800">
+              <div className="flex items-center space-x-2 pl-2 border-l border-slate-200 dark:border-slate-800">
                 <button
                   type="button"
                   onClick={onOpenSecurity}
                   className="flex items-center space-x-1.5 px-2.5 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs transition-colors cursor-pointer"
                   title={`Connecté en tant que ${userEmail} • Cliquer pour modifier le mot de passe`}
                 >
-                  <User className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" />
-                  <span className="font-medium max-w-[130px] truncate">
+                  <User className="w-3.5 h-3.5 text-slate-600 dark:text-slate-400" />
+                  <span className="font-medium max-w-[150px] truncate">
                     {userName || userEmail.split('@')[0]}
                   </span>
                 </button>
@@ -232,21 +189,92 @@ export const Header: React.FC<HeaderProps> = ({
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between py-2 overflow-x-auto no-scrollbar gap-2">
             
-            {/* Left: Model Tabs or Report Switcher */}
+            {/* Left: Modules & Views */}
             <div className="flex items-center space-x-1">
               
-              {/* Report Tab Button (Always visible on all screen sizes) */}
+              {/* Home / Dashboard Tab Button */}
+              <button
+                id="header-tab-home"
+                onClick={() => onSelectView('home')}
+                className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition-colors cursor-pointer ${
+                  activeView === 'home'
+                    ? 'bg-[#0B2559] text-white dark:bg-blue-600 dark:text-white shadow-xs'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800'
+                }`}
+              >
+                <LayoutDashboard className="w-3.5 h-3.5" />
+                <span>Accueil / Dashboard</span>
+              </button>
+
+              {/* Bilan Facturation Tab Button */}
+              <button
+                id="header-tab-billing"
+                onClick={() => onSelectView('billing')}
+                className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition-colors cursor-pointer ${
+                  activeView === 'billing'
+                    ? 'bg-[#0B2559] text-white dark:bg-blue-600 dark:text-white shadow-xs'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800'
+                }`}
+              >
+                <BarChart3 className="w-3.5 h-3.5" />
+                <span>Bilan Facturation</span>
+              </button>
+
+              {/* Sorties d'Encours Achats Tab Button */}
+              <button
+                id="header-tab-wip-outflow"
+                onClick={() => onSelectView('wip-outflow')}
+                className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition-colors cursor-pointer ${
+                  activeView === 'wip-outflow'
+                    ? 'bg-[#0B2559] text-white dark:bg-blue-600 dark:text-white shadow-xs'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800'
+                }`}
+                title="Achats et sous-traitances rattachés aux ventes facturées par mois"
+              >
+                <PackageMinus className="w-3.5 h-3.5 text-amber-400" />
+                <span>Sorties d'Encours Achats</span>
+              </button>
+
+              {/* Report Tab Button: Affaires à Facturer */}
               <button
                 id="header-tab-report"
                 onClick={() => onSelectView('report')}
-                className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all cursor-pointer ${
+                className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition-colors cursor-pointer ${
                   activeView === 'report'
-                    ? 'bg-purple-600 text-white shadow-xs'
-                    : 'text-purple-700 dark:text-purple-300 bg-purple-50 dark:bg-purple-950/60 hover:bg-purple-100 dark:hover:bg-purple-900/60 border border-purple-200 dark:border-purple-800/80'
+                    ? 'bg-[#0B2559] text-white dark:bg-blue-600 dark:text-white shadow-xs'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800'
                 }`}
               >
                 <FileSpreadsheet className="w-3.5 h-3.5" />
-                <span>Rapport : Affaires à Facturer</span>
+                <span>Affaires à Facturer</span>
+              </button>
+
+              {/* Timesheets Tab Button */}
+              <button
+                id="header-tab-timesheets"
+                onClick={() => onSelectView('timesheets')}
+                className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition-colors cursor-pointer ${
+                  activeView === 'timesheets'
+                    ? 'bg-[#0B2559] text-white dark:bg-blue-600 dark:text-white shadow-xs'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800'
+                }`}
+              >
+                <Clock className="w-3.5 h-3.5" />
+                <span>Contrôle des Pointages</span>
+              </button>
+
+              {/* Moulds Weight Check Tab Button */}
+              <button
+                id="header-tab-moulds"
+                onClick={() => onSelectView('moulds')}
+                className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition-colors cursor-pointer ${
+                  activeView === 'moulds'
+                    ? 'bg-[#0B2559] text-white dark:bg-blue-600 dark:text-white shadow-xs'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800'
+                }`}
+              >
+                <Scale className="w-3.5 h-3.5" />
+                <span>Poids Moules Neufs</span>
               </button>
 
               <div className="h-4 w-px bg-slate-200 dark:bg-slate-800 mx-1"></div>
@@ -262,9 +290,9 @@ export const Header: React.FC<HeaderProps> = ({
                       onSelectView('explorer');
                       onSelectModel(m);
                     }}
-                    className={`flex items-center space-x-2 px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition-all cursor-pointer ${
+                    className={`flex items-center space-x-2 px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition-colors cursor-pointer ${
                       isActive
-                        ? 'bg-white dark:bg-slate-800 text-purple-700 dark:text-purple-300 shadow-xs border border-purple-200 dark:border-purple-700/50 font-semibold'
+                        ? 'bg-white dark:bg-slate-800 text-slate-900 dark:text-white shadow-xs border border-slate-200 dark:border-slate-700'
                         : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-900'
                     }`}
                   >
@@ -282,7 +310,7 @@ export const Header: React.FC<HeaderProps> = ({
                   onSelectView('explorer');
                   onOpenCustomModel();
                 }}
-                className="flex items-center space-x-1 px-2.5 py-1.5 rounded-lg text-xs font-medium text-purple-600 dark:text-purple-400 hover:bg-purple-50 dark:hover:bg-purple-950/50 border border-dashed border-purple-300 dark:border-purple-800 transition-colors cursor-pointer"
+                className="flex items-center space-x-1 px-2.5 py-1.5 rounded-lg text-xs font-medium text-slate-500 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 border border-dashed border-slate-300 dark:border-slate-700 transition-colors cursor-pointer"
                 title="Interroger un autre modèle technique Odoo (ex: stock.picking, mrp.production)"
               >
                 <Plus className="w-3 h-3" />
@@ -296,4 +324,5 @@ export const Header: React.FC<HeaderProps> = ({
     </header>
   );
 };
+
 

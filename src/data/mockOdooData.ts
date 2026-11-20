@@ -36,6 +36,7 @@ export const MOCK_DATA: Record<string, Record<string, any>[]> = {
       amount_total: 17100.00,
       state: 'sale',
       invoice_status: 'to invoice',
+      tag_ids: [1],
       validity_date: '2026-09-22',
       client_order_ref: 'PO-DECO-998',
       note: 'Livraison express demandée sous 48h.'
@@ -820,6 +821,107 @@ export const MOCK_DATA: Record<string, Record<string, any>[]> = {
       date: '2026-08-11',
       parent_state: 'posted',
       analytic_account_id: [1012, 'Conformité Dispositifs Médicaux']
+    },
+    {
+      id: 807,
+      name: 'Abonnement Plateforme Cloud & Télécom (Ventilation multi-dossiers 40/40/20)',
+      ref: 'BILL/2026/00048',
+      move_id: [216, 'BILL/2026/00048'],
+      partner_id: [68, 'Cloud Infrastructure SAS (Roubaix)'],
+      price_subtotal: 1000.00,
+      debit: 1000.00,
+      credit: 0.00,
+      date: '2026-08-19',
+      parent_state: 'posted',
+      analytic_distribution: {
+        '1010': 40.0,
+        '1001': 40.0,
+        '1008': 20.0
+      }
     }
+  ],
+  'purchase.order.line': [
+    {
+      id: 901,
+      name: 'Routeurs industriels haute disponibilité (2x Gigabit) - Commande confirmée en cours de livraison',
+      order_id: [301, 'PO00189'],
+      partner_id: [62, 'TechVendor SAS (Paris)'],
+      product_id: [401, 'Routeur Cisco ISR 4321'],
+      product_qty: 2,
+      qty_invoiced: 0,
+      price_unit: 850.00,
+      price_subtotal: 1700.00,
+      date_order: '2026-08-22 10:15:00',
+      date_approve: '2026-08-22 10:30:00',
+      state: 'purchase',
+      analytic_account_id: [1010, 'Projet Déploiement - Client XYZ']
+    },
+    {
+      id: 902,
+      name: 'Modules SFP+ Fibre optique 10Gbps monomode (Lot de 4)',
+      order_id: [301, 'PO00189'],
+      partner_id: [62, 'TechVendor SAS (Paris)'],
+      product_id: [402, 'Module Transceiver SFP+ 10G LR'],
+      product_qty: 4,
+      qty_invoiced: 0,
+      price_unit: 145.00,
+      price_subtotal: 580.00,
+      date_order: '2026-08-22 10:15:00',
+      date_approve: '2026-08-22 10:30:00',
+      state: 'purchase',
+      analytic_account_id: [1010, 'Projet Déploiement - Client XYZ']
+    },
+    {
+      id: 903,
+      name: 'Profilés aluminium brossé et fixations renforcées pour showroom',
+      order_id: [302, 'PO00192'],
+      partner_id: [60, 'Matières Premières & Bois SA (Strasbourg)'],
+      product_id: [405, 'Profilé Alu 40x40mm Sur-mesure'],
+      product_qty: 12,
+      qty_invoiced: 4,
+      price_unit: 95.00,
+      price_subtotal: 1140.00,
+      date_order: '2026-08-21 14:00:00',
+      date_approve: '2026-08-21 15:00:00',
+      state: 'purchase',
+      analytic_account_id: [1001, 'Aménagement Showroom Deco Addict']
+    },
+    {
+      id: 904,
+      name: 'Étalonnage certifié capteurs d\'ambiance et flux thermique',
+      order_id: [303, 'PO00195'],
+      partner_id: [70, 'Laboratoire Certif Qualité (Nantes)'],
+      product_id: [408, 'Prestation Étalonnage Labo ISO17025'],
+      product_qty: 1,
+      qty_invoiced: 0,
+      price_unit: 720.00,
+      price_subtotal: 720.00,
+      date_order: '2026-08-18 11:20:00',
+      date_approve: '2026-08-18 14:00:00',
+      state: 'purchase',
+      analytic_account_id: [1008, 'Audit Énergétique EcoBat']
+    },
+    {
+      id: 905,
+      name: 'Licences annuelles Firewall UTM Next-Gen multi-sites',
+      order_id: [304, 'PO00199'],
+      partner_id: [68, 'Cloud Infrastructure SAS (Roubaix)'],
+      product_id: [412, 'Licence FortiGate Enterprise 1Y'],
+      product_qty: 1,
+      qty_invoiced: 0,
+      price_unit: 1850.00,
+      price_subtotal: 1850.00,
+      date_order: '2026-08-15 09:00:00',
+      date_approve: '2026-08-15 09:30:00',
+      state: 'purchase',
+      analytic_account_id: [1011, 'Migration Infrastructure Novatech']
+    }
+  ],
+  'crm.tag': [
+    { id: 1, name: 'Moule neuf', color: 4 },
+    { id: 2, name: 'SAV Outillage', color: 2 },
+    { id: 3, name: 'Réparation', color: 3 },
+    { id: 4, name: 'Haute Précision', color: 5 },
+    { id: 5, name: 'Salle Blanche ISO 7', color: 6 }
   ]
 };

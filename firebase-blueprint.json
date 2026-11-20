@@ -17,12 +17,126 @@
         "updatedAt": { "type": "string", "description": "Date de dernière mise à jour" }
       },
       "required": ["userId"]
+    },
+    "timesheet_exclusion": {
+      "title": "Justification et Validation de Pointage",
+      "description": "Persistance pérenne et partagée des validations d'heures (< 7h), congés, maladies et absences non gérées dans Odoo",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Identifiant composite sous forme employeeId_date (ex: 101_2026-03-02)" },
+        "employeeId": { "type": "number", "description": "Identifiant Odoo de l'employé" },
+        "employeeName": { "type": "string", "description": "Nom complet de l'employé" },
+        "date": { "type": "string", "description": "Date concernée au format YYYY-MM-DD" },
+        "reason": { "type": "string", "enum": ["valide", "conge", "maladie", "ferie", "autre"], "description": "Motif de validation ou d'absence" },
+        "comment": { "type": "string", "description": "Commentaire de justification ou note de validation" },
+        "createdAt": { "type": "string", "description": "Horodatage de création" },
+        "updatedAt": { "type": "string", "description": "Horodatage de mise à jour" }
+      },
+      "required": ["id", "employeeId", "date", "reason"]
+    },
+    "timesheet_workgroup": {
+      "title": "Groupe de Travail d'Audit",
+      "description": "Groupes d'employés personnalisés partagés pour le filtrage et l'analyse d'équipe",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Identifiant unique du groupe de travail" },
+        "name": { "type": "string", "description": "Nom du groupe de travail" },
+        "description": { "type": "string", "description": "Description du rôle ou de l'équipe" },
+        "employeeIds": { "type": "array", "description": "Liste des IDs Odoo des employés membres du groupe" },
+        "color": { "type": "string", "description": "Code couleur de badge optionnel" },
+        "createdAt": { "type": "string", "description": "Date de création du groupe" },
+        "updatedAt": { "type": "string", "description": "Date de modification du groupe" }
+      },
+      "required": ["id", "name"]
+    },
+    "clock_profile": {
+      "title": "Profil Pointeuse Collaborateur",
+      "description": "Paramètres d'audit de présence physique, déduction pause et statut contractuel par collaborateur",
+      "type": "object",
+      "properties": {
+        "employeeId": { "type": "number", "description": "Identifiant Odoo de l'employé" },
+        "employeeName": { "type": "string", "description": "Nom complet de l'employé" },
+        "status": { "type": "string", "enum": ["standard", "contractor", "student", "sick", "other"], "description": "Statut contractuel du collaborateur (Salarié, Indépendant, Étudiant, Malade, Autre)" },
+        "deductLunch": { "type": "boolean", "description": "Déduire 30 minutes de pause midi si coché" },
+        "requireValidationAlert": { "type": "boolean", "description": "Générer une alerte orange 'Validation requise' même en cas d'égalité Pointeuse == Odoo" },
+        "lunchDeduction": { "type": "string", "enum": ["none", "30m", "45m", "60m"], "description": "Déduction automatique pause midi (rétrocompatibilité)" },
+        "contractType": { "type": "string", "enum": ["standard", "contractor", "student", "sick", "other", "part_time"], "description": "Statut contractuel (rétrocompatibilité)" },
+        "toleranceMinutes": { "type": "number", "description": "Marge de tolérance autorisée en minutes (ex: 15)" },
+        "alertOnContractorEqual": { "type": "boolean", "description": "Alerter si pointage égal à la pointeuse pour un indépendant (rétrocompatibilité)" },
+        "customNotes": { "type": "string", "description": "Remarques ou règles d'alerte spécifiques" },
+        "updatedAt": { "type": "string", "description": "Date de dernière mise à jour" }
+      },
+      "required": ["employeeId"]
+    },
+    "clock_justification": {
+      "title": "Justification Écart Pointeuse vs Odoo",
+      "description": "Validation et justification des anomalies de pointages pointeuse vs imputations Odoo",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Identifiant composite employeeId_date" },
+        "employeeId": { "type": "number", "description": "ID Odoo du collaborateur" },
+        "employeeName": { "type": "string", "description": "Nom du collaborateur" },
+        "date": { "type": "string", "description": "Date concernée YYYY-MM-DD" },
+        "reason": { "type": "string", "description": "Motif de l'écart ou de la régularisation" },
+        "comment": { "type": "string", "description": "Détails explicatifs de la validation" },
+        "status": { "type": "string", "enum": ["justified", "pending"], "description": "Statut de justification" },
+        "createdAt": { "type": "string", "description": "Horodatage de validation" },
+        "updatedAt": { "type": "string", "description": "Horodatage de mise à jour" }
+      },
+      "required": ["id", "employeeId", "date", "reason"]
+    },
+    "clock_imported_record": {
+      "title": "Relevé de Pointage Pointeuse Importé",
+      "description": "Enregistrement persistant d'un pointage physique ou créneau importé par collaborateur et date",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Identifiant composite unique du relevé (ex: emp_101_2026-09-08)" },
+        "employeeNameRaw": { "type": "string", "description": "Nom brut du collaborateur dans le relevé" },
+        "matchedEmployeeId": { "type": "number", "description": "Identifiant de l'employé Odoo associé" },
+        "matchedEmployeeName": { "type": "string", "description": "Nom de l'employé Odoo associé" },
+        "date": { "type": "string", "description": "Date du pointage au format YYYY-MM-DD" },
+        "rawHours": { "type": "number", "description": "Heures de présence retenues (décimales)" },
+        "startTime": { "type": "string", "description": "Heure de début constatée" },
+        "endTime": { "type": "string", "description": "Heure de fin constatée" },
+        "entree1": { "type": "string", "description": "Créneau 1 Entrée" },
+        "sortie1": { "type": "string", "description": "Créneau 1 Sortie" },
+        "entree2": { "type": "string", "description": "Créneau 2 Entrée" },
+        "sortie2": { "type": "string", "description": "Créneau 2 Sortie" },
+        "entree3": { "type": "string", "description": "Créneau 3 Entrée" },
+        "sortie3": { "type": "string", "description": "Sortie 3 ou cumul calculé par la badgeuse" },
+        "tempsPresentEff": { "type": "string", "description": "Temps présent effectif lu" },
+        "calculationMethod": { "type": "string", "description": "Méthode de calcul retenue (sortie_3, creneaux, total_eff, zero)" },
+        "isNonWorkingDay": { "type": "boolean", "description": "Indicateur jour non ouvré ou absence" },
+        "badgeNumber": { "type": "string", "description": "Numéro de badge optionnel" },
+        "updatedAt": { "type": "string", "description": "Horodatage de sauvegarde" }
+      },
+      "required": ["id", "employeeNameRaw", "date", "rawHours"]
     }
   },
   "firestore": {
     "/user_settings/{userId}": {
       "schema": "user_settings",
-      "description": "Document de configuration unique par utilisateur, sécurisé par RLS (seul le propriétaire userId peut lire et écrire)"
+      "description": "Document de configuration unique par utilisateur"
+    },
+    "/timesheet_exclusions/{exclusionId}": {
+      "schema": "timesheet_exclusion",
+      "description": "Enregistrements persistants des validations d'heures et justifications d'absences partagées pour toute l'entreprise"
+    },
+    "/timesheet_workgroups/{workgroupId}": {
+      "schema": "timesheet_workgroup",
+      "description": "Définition des groupes de travail partagés et pérennes dans l'entreprise"
+    },
+    "/clock_profiles/{profileId}": {
+      "schema": "clock_profile",
+      "description": "Paramètres d'audit et profils pointeuse configurés par collaborateur"
+    },
+    "/clock_justifications/{justificationId}": {
+      "schema": "clock_justification",
+      "description": "Justifications et validations pérennes des écarts pointeuse vs Odoo"
+    },
+    "/clock_imported_records/{recordId}": {
+      "schema": "clock_imported_record",
+      "description": "Pointages de badgeuse persistants et cumulés par jour et collaborateur"
     }
   }
 }

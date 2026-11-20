@@ -70,13 +70,59 @@ async function startServer() {
     return res.status(status).json(body);
   });
 
-  // Vite middleware for development
+  // Report: Contrôle des Pointages / Suivi des Feuilles de Temps
+  app.post('/api/odoo/report/timesheets-audit', async (req, res) => {
+    const { status, body } = await handleOdooRequest(req.body, 'report/timesheets-audit');
+    return res.status(status).json(body);
+  });
+
+  // Report: Vérification du Poids (Moules Neufs)
+  app.post('/api/odoo/report/mould-weight-check', async (req, res) => {
+    const { status, body } = await handleOdooRequest(req.body, 'report/mould-weight-check');
+    return res.status(status).json(body);
+  });
+  app.post('/api/odoo/report/weight-check', async (req, res) => {
+    const { status, body } = await handleOdooRequest(req.body, 'report/mould-weight-check');
+    return res.status(status).json(body);
+  });
+
+  // Report: Bilan de Facturation (Ventes & Achats)
+  app.post('/api/odoo/report/billing-summary', async (req, res) => {
+    const { status, body } = await handleOdooRequest(req.body, 'report/billing-summary');
+    return res.status(status).json(body);
+  });
+  app.post('/api/odoo/report/billing', async (req, res) => {
+    const { status, body } = await handleOdooRequest(req.body, 'report/billing-summary');
+    return res.status(status).json(body);
+  });
+
+  // Report: Sorties d'Encours Achats (Achats des Ventes Facturées)
+  app.post('/api/odoo/report/wip-purchases-outflow', async (req, res) => {
+    const { status, body } = await handleOdooRequest(req.body, 'report/wip-purchases-outflow');
+    return res.status(status).json(body);
+  });
+  app.post('/api/odoo/report/wip-outflow', async (req, res) => {
+    const { status, body } = await handleOdooRequest(req.body, 'report/wip-purchases-outflow');
+    return res.status(status).json(body);
+  });
+
+  // Vite middleware for development (initialize asynchronously so port 3000 binds immediately)
   if (process.env.NODE_ENV !== 'production') {
-    const vite = await createViteServer({
+    const vitePromise = createViteServer({
       server: { middlewareMode: true },
       appType: 'spa',
     });
-    app.use(vite.middlewares);
+    vitePromise.catch((err) => {
+      console.error('❌ Failed to initialize Vite dev server:', err);
+    });
+    app.use(async (req, res, next) => {
+      try {
+        const vite = await vitePromise;
+        vite.middlewares(req, res, next);
+      } catch (err) {
+        next(err);
+      }
+    });
   } else {
     const distPath = path.join(process.cwd(), 'dist');
     app.use(express.static(distPath));
@@ -90,4 +136,7 @@ async function startServer() {
   });
 }
 
-startServer();
+startServer().catch((err) => {
+  console.error('❌ Fatal error starting server:', err);
+  process.exit(1);
+});

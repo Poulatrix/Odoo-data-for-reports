@@ -3,7 +3,37 @@ service cloud.firestore {
   match /databases/{database}/documents {
     // Permet la lecture et écriture des paramètres par identifiant d'utilisateur
     match /user_settings/{userId} {
-      allow read, write: if request.auth != null ? request.auth.uid == userId : true;
+      allow read, write: if true;
+    }
+
+    // Justifications d'absence, congés et validations d'heures d'audit
+    match /timesheet_exclusions/{exclusionId} {
+      allow read, write: if true;
+    }
+
+    // Groupes de travail d'audit
+    match /timesheet_workgroups/{workgroupId} {
+      allow read, write: if true;
+    }
+
+    // Profils de configuration pointeuse des collaborateurs
+    match /clock_profiles/{profileId} {
+      allow read, write: if true;
+    }
+
+    // Justifications des écarts pointeuse vs odoo
+    match /clock_justifications/{justificationId} {
+      allow read, write: if true;
+    }
+
+    // Relevés de pointages importés de la pointeuse (Excel / CSV)
+    match /clock_imported_records/{recordId} {
+      allow read, write: if true;
+    }
+
+    // Document de secours global d'entreprise
+    match /company_settings/{docId} {
+      allow read, write: if true;
     }
 
     // Refuser tout le reste

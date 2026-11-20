@@ -820,6 +820,23 @@ export const MOCK_DATA: Record<string, Record<string, any>[]> = {
       date: '2026-08-11',
       parent_state: 'posted',
       analytic_account_id: [1012, 'Conformité Dispositifs Médicaux']
+    },
+    {
+      id: 807,
+      name: 'Abonnement Plateforme Cloud & Télécom (Ventilation multi-dossiers 40/40/20)',
+      ref: 'BILL/2026/00048',
+      move_id: [216, 'BILL/2026/00048'],
+      partner_id: [68, 'Cloud Infrastructure SAS (Roubaix)'],
+      price_subtotal: 1000.00,
+      debit: 1000.00,
+      credit: 0.00,
+      date: '2026-08-19',
+      parent_state: 'posted',
+      analytic_distribution: {
+        '1010': 40.0,
+        '1001': 40.0,
+        '1008': 20.0
+      }
     }
   ]
 };

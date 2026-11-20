@@ -20,165 +20,166 @@ export interface OdooFieldDefinition {
   relation?: string;
 }
 
+export type MouldWeightStatus = 'ANOMALIE' | 'CONFORME';
+
+export interface MouldWeightCheckItem {
+  id: string;
+  orderId: number;
+  orderName: string;
+  clientOrderRef?: string;
+  orderDate?: string;
+  partnerId: number;
+  partnerName: string;
+  lineId: number;
+  lineName?: string;
+  productId: number;
+  productName: string;
+  productDefaultCode?: string;
+  productTmplId?: number;
+  tagNames: string[];
+  tagDisplay: string;
+  weight: number;
+  hasWeight: boolean;
+  status: MouldWeightStatus;
+  statusLabel: string;
+  odooProductUrl?: string;
+  odooOrderUrl?: string;
+}
+
+export interface MouldWeightCheckSummary {
+  totalOrdersCount: number;
+  totalProductsCount: number;
+  anomaliesCount: number;
+  compliantCount: number;
+  complianceRate: number;
+}
+
 interface CacheEntry {
   data: any;
   timestamp: number;
 }
 
 /**
- * Helper to check if an account.analytic.line is a true timesheet (hours prestées)
- * RULE: Any account.analytic.line must be classified as a Timesheet (Feuilles de Temps) and added to Total Hours if:
- * 1. Has an hour unit (UoM contains 'hour' / 'heur' / 'h' / 'hr' / 'hrs') OR category === 'timesheet' OR employee_id is set with non-physical UoM.
- * 2. AND account_id / description / partner does NOT indicate an external purchase, transport, carriage, supplier, or material (e.g. MOU500, PK transport, P-K Transports).
- * 3. AND move_line_id is false/empty (not a linked vendor invoice line).
- * 4. IMPORTANT: user_id alone is NOT a proof of timesheet, because in Odoo ERP user_id is the audit creator on all records!
+ * Strict 3-Branch Exclusive Classifier for account.analytic.line:
+ * 
+ * BRANCHE 1 : FEUILLES DE TEMPS (HEURES) -> "Total Heures Prestées"
+ * SI :
+ * - account_id.name ne contient pas 'MOU500' (ni autre compte d'achat/fourniture).
+ * - ET (unit_amount != 0 avec unité de temps 'Hours' OU un intervenant/employé est renseigné OU category === 'timesheet').
+ * -> Action : Additionner unit_amount aux heures et NE PAS ajouter dans Pragma.
+ * 
+ * BRANCHE 2 : FACTURES FOURNISSEURS & ACHATS MATÉRIEL -> "Factures Fournisseurs (€ HT)"
+ * SI :
+ * - move_line_id n'est pas vide (Facture fournisseur liée).
+ * - OU purchase_line_id n'est pas vide (Bon de commande d'achat lié).
+ * - OU account_id.name contient 'MOU500' ou est identifié comme un compte d'achat fournisseur / sous-traitance externe.
+ * -> Action : Additionner le montant à "Factures Fournisseurs (€ HT)" et EXCLURE de Pragma.
+ * 
+ * BRANCHE 3 : PRAGMAS / RÉGULATIONS DIRECTES (RÉSIDUEL) -> "Écritures Analytiques Directes / Pragma (€ HT)"
+ * QUE LES LIGNES QUI :
+ * - N'ont AUCUNE facture ou commande d'achat liée (move_line_id = False ET purchase_line_id = False).
+ * - NE SONT PAS des heures (pas d'unité 'Hours', pas d'intervenant de main-d'œuvre).
+ * - Sont des régulations directes d'encours ou ajustements comptables manuels sans pièce justificative fournisseur.
  */
-function isTrueTimesheetAnalyticLine(al: any): boolean {
-  // If linked to a vendor invoice (move_line_id), it is a vendor bill line, not a timesheet
-  if (al.move_line_id && al.move_line_id !== false) {
-    return false;
-  }
+export type AnalyticBranch = 'timesheet' | 'vendor_bill' | 'pragma';
 
-  // Check partner_id: If a partner is set and it represents a supplier / vendor (e.g. P-K Transports, transporteur, fournisseur), it's not a timesheet
-  if (al.partner_id && al.partner_id !== false) {
-    const partnerName = (
-      Array.isArray(al.partner_id) ? al.partner_id[1] : (typeof al.partner_id === 'string' ? al.partner_id : '')
-    ).toUpperCase();
-    if (
-      partnerName.includes('TRANSPORT') ||
-      partnerName.includes('FOURNISSEUR') ||
-      partnerName.includes('SUPPLIER') ||
-      partnerName.includes('P-K') ||
-      partnerName.includes('PK ')
-    ) {
-      return false;
-    }
-  }
+export function classifyAnalyticLine(al: any): AnalyticBranch {
+  // Check linked vendor bill or purchase order line
+  const hasMoveLine = Boolean(
+    al.move_line_id && al.move_line_id !== false && (Array.isArray(al.move_line_id) ? al.move_line_id[0] : al.move_line_id)
+  );
+  const hasPurchaseLine = Boolean(
+    al.purchase_line_id && al.purchase_line_id !== false && (Array.isArray(al.purchase_line_id) ? al.purchase_line_id[0] : al.purchase_line_id)
+  );
 
-  // Check description/name for explicit transport, purchases, materials, or hardware supplies
-  const desc = String(al.name || '').toUpperCase();
-  if (
-    desc.includes('TRANSPORT') ||
-    desc.includes('PK TRANSPORT') ||
-    desc.includes('P-K TRANSPORT') ||
-    desc.includes('LIVRAISON') ||
-    desc.includes('FRAIS') ||
-    desc.includes('PORT ') ||
-    desc.includes('ACHAT') ||
-    desc.includes('FOURNITURE') ||
-    desc.includes('MATERIEL') ||
-    desc.includes('MATÉRIEL') ||
-    desc.includes('MATIERE') ||
-    desc.includes('MATIÈRE') ||
-    desc.includes('BOUCHON') ||
-    desc.includes('PIECE') ||
-    desc.includes('PIÈCE') ||
-    desc.includes('COLIS') ||
-    desc.includes('MOU500')
-  ) {
-    return false;
-  }
-
-  // Check account_id name or code for explicit purchase/material/transport accounts (e.g. MOU500)
   const accName = (
     Array.isArray(al.account_id) ? al.account_id[1] : (typeof al.account_id === 'string' ? al.account_id : '')
+  ).toUpperCase();
+
+  const genAccName = (
+    Array.isArray(al.general_account_id) ? al.general_account_id[1] : (typeof al.general_account_id === 'string' ? al.general_account_id : '')
   ).toUpperCase();
 
   const isMaterialOrPurchaseAccount = (
     accName.includes('MOU500') ||
     accName.includes('ACHAT') ||
-    accName.includes('FOURNITURE') ||
     accName.includes('FOURNISSEUR') ||
+    accName.includes('FOURNITURE') ||
+    accName.includes('SOUS-TRAITANCE') ||
+    accName.includes('SOUS TRAITANCE') ||
+    accName.includes('SOUS_TRAITANCE') ||
     accName.includes('STOCK') ||
     accName.includes('MATIERE') ||
     accName.includes('MATIÈRE') ||
     accName.includes('MATERIEL') ||
     accName.includes('MATÉRIEL') ||
-    accName.includes('TRANSPORT') ||
-    accName.includes('FRAIS')
+    genAccName.startsWith('60') ||
+    genAccName.startsWith('61') ||
+    genAccName.startsWith('62')
   );
 
-  if (isMaterialOrPurchaseAccount) {
-    return false;
+  // BRANCHE 2 : FACTURES FOURNISSEURS & ACHATS MATÉRIEL
+  if (
+    hasMoveLine ||
+    hasPurchaseLine ||
+    isMaterialOrPurchaseAccount ||
+    al.category === 'vendor_bill' ||
+    al.category === 'purchase'
+  ) {
+    return 'vendor_bill';
   }
 
-  // Check UoM (Unit of Measure) name
+  // UoM inspection
   const uomName = (
     Array.isArray(al.product_uom_id) ? al.product_uom_id[1] : (typeof al.product_uom_id === 'string' ? al.product_uom_id : '')
   ).toLowerCase().trim();
 
-  const isExplicitHourUom = uomName ? (
+  const isExplicitHourUom = Boolean(uomName && (
     uomName.includes('heur') ||
     uomName.includes('hour') ||
     uomName === 'h' ||
     uomName === 'hr' ||
     uomName === 'hrs'
-  ) : false;
+  ));
 
-  const isExplicitPhysicalUom = uomName ? (
-    !isExplicitHourUom && (
-      uomName.includes('pièce') ||
-      uomName.includes('piece') ||
-      uomName.includes('unité') ||
-      uomName.includes('unite') ||
-      uomName.includes('unit') ||
-      uomName.includes('bouchon') ||
-      uomName.includes('colis') ||
-      uomName.includes('kg') ||
-      uomName.includes('mètre') ||
-      uomName.includes('metre') ||
-      uomName.includes('m') ||
-      uomName.includes('l') ||
-      uomName.includes('litre')
-    )
-  ) : false;
+  const isExplicitPhysicalUom = Boolean(uomName && !isExplicitHourUom && (
+    uomName.includes('pièce') ||
+    uomName.includes('piece') ||
+    uomName.includes('unité') ||
+    uomName.includes('unite') ||
+    uomName.includes('unit') ||
+    uomName.includes('bouchon') ||
+    uomName.includes('colis') ||
+    uomName.includes('kg') ||
+    uomName.includes('mètre') ||
+    uomName.includes('metre') ||
+    uomName.includes('m') ||
+    uomName.includes('l') ||
+    uomName.includes('litre')
+  ));
 
   if (isExplicitPhysicalUom) {
-    return false; // Physical unit => goes to Material / Direct
+    return 'vendor_bill';
   }
 
-  // If explicit hour UoM, it is definitely a timesheet
-  if (isExplicitHourUom) {
-    return true;
+  const hasEmployee = Boolean(
+    al.employee_id && al.employee_id !== false && (Array.isArray(al.employee_id) ? al.employee_id[0] : al.employee_id)
+  );
+
+  const unitAmt = Number(al.unit_amount) || 0;
+
+  // BRANCHE 1 : FEUILLES DE TEMPS (HEURES)
+  if (
+    al.category === 'timesheet' ||
+    (Math.abs(unitAmt) > 0 && isExplicitHourUom) ||
+    (hasEmployee && Math.abs(unitAmt) > 0) ||
+    (hasEmployee && !uomName)
+  ) {
+    return 'timesheet';
   }
 
-  // In Odoo, if category === 'timesheet', it is a timesheet
-  if (al.category === 'timesheet') {
-    return true;
-  }
-
-  // If an employee (hr.employee) is explicitly set and UoM is not physical
-  const hasEmployee = Boolean(al.employee_id && al.employee_id !== false);
-  if (hasEmployee && !isExplicitPhysicalUom) {
-    return true;
-  }
-
-  // If task_id is set and unit_amount > 0 and no vendor/purchase indicator
-  const hasTask = Boolean(al.task_id && al.task_id !== false);
-  if (hasTask && Number(al.unit_amount) > 0 && !isExplicitPhysicalUom) {
-    return true;
-  }
-
-  // Default: if no explicit hour UoM, no employee, no timesheet category, it is an accounting/analytic line, not a timesheet
-  return false;
-}
-
-/**
- * Helper to check if an account.analytic.line is a purchase, material, or direct non-hour line
- * (Régulation Pragma / Achats Directs / Transports)
- */
-function isPurchaseOrMaterialAnalyticLine(al: any): boolean {
-  // 1. Linked to a vendor bill / invoice line (account.move.line)
-  if (al.move_line_id && al.move_line_id !== false) {
-    return true;
-  }
-
-  // If it's a true timesheet, it is NOT purchase/material/pragma
-  if (isTrueTimesheetAnalyticLine(al)) {
-    return false;
-  }
-
-  return true;
+  // BRANCHE 3 : PRAGMAS / RÉGULATIONS DIRECTES (RÉSIDUEL)
+  return 'pragma';
 }
 
 export class OdooBackendService {
@@ -968,7 +969,7 @@ export class OdooBackendService {
       const candidateAalFields = [
         'id', 'name', 'unit_amount', 'date', 'user_id', 'employee_id', 
         'account_id', 'so_line', 'project_id', 'task_id', 'amount', 'move_line_id', 
-        'category', 'product_uom_id', 'partner_id', 'ref', 'product_id', 'general_account_id'
+        'purchase_line_id', 'category', 'product_uom_id', 'partner_id', 'ref', 'product_id', 'general_account_id'
       ];
       const safeAalFields = aalFieldsSet.size > 0 
         ? candidateAalFields.filter(f => aalFieldsSet.has(f) || f === 'id')
@@ -1177,9 +1178,35 @@ export class OdooBackendService {
         return false;
       });
 
-      const orderTimesheets = matchingAnalyticLines.filter(al => {
-        return isTrueTimesheetAnalyticLine(al);
-      }).map(al => {
+      // STRICT 3-BRANCH EXCLUSIVE DISPATCHING OF account.analytic.line:
+      // 1. Branche 1: Timesheets (Heures prestées) -> Total Heures Prestées (non inclus dans Pragma)
+      // 2. Branche 2: Factures Fournisseurs & Achats Matériel (MOU500, move_line_id, purchase_line_id, etc.) -> Factures Fournisseurs (non inclus dans Pragma)
+      // 3. Branche 3: Pragmas / Régulations Directes (Résiduel sans pièce d'achat et sans heures) -> Écritures Analytiques Directes / Pragma
+      const branch1Timesheets: any[] = [];
+      const branch2PurchasesFromAal: any[] = [];
+      const branch3Pragmas: any[] = [];
+
+      for (const al of matchingAnalyticLines) {
+        const branch = classifyAnalyticLine(al);
+        if (branch === 'timesheet') {
+          branch1Timesheets.push(al);
+        } else if (branch === 'vendor_bill') {
+          branch2PurchasesFromAal.push(al);
+        } else {
+          // Branche 3: Pragma / Régulations directes résiduelles
+          const rawAmt = Number(al.amount) || 0;
+          const unitAmt = Number(al.unit_amount) || 0;
+          if (rawAmt !== 0 || unitAmt !== 0) {
+            branch3Pragmas.push(al);
+          }
+        }
+      }
+
+      // 1. BRANCHE 1 : FEUILLES DE TEMPS (HEURES)
+      // Odoo stocke les coûts/prestations d'heures avec un montant financier 'amount' NÉGATIF pour les charges (ex: -182,68 € pour 2,5 hrs).
+      // - Si 'amount' <= 0 (Charge / Heures prestées sur le projet) : unit_amount comptabilisée en POSITIF (+).
+      // - Si 'amount' > 0 (Régulation / Transfert d'heures hors du projet) : unit_amount comptabilisée en NÉGATIF (-) pour se déduire du total du projet.
+      const orderTimesheets = branch1Timesheets.map(al => {
         const unitAmount = Number(al.unit_amount) || 0;
         const amountVal = Number(al.amount) || 0;
         const effectiveHours = (amountVal > 0) ? -Math.abs(unitAmount) : Math.abs(unitAmount);
@@ -1201,24 +1228,116 @@ export class OdooBackendService {
 
       const totalHours = Math.round(orderTimesheets.reduce((sum, ts) => sum + (ts.effective_hours !== undefined ? ts.effective_hours : ts.unit_amount), 0) * 100) / 100;
 
-      const orderManualAnalyticLines = matchingAnalyticLines.filter(al => {
-        const isMoveLinked = Boolean(al.move_line_id && al.move_line_id !== false);
-        if (isMoveLinked) return false;
+      // 2. BRANCHE 2 : FACTURES FOURNISSEURS & ACHATS MATÉRIEL
+      // Regroupe les factures d'achat comptabilisées (account.move.line proratisées) et les écritures analytiques de factures/commandes/MOU500
+      const seenBillMoveLineIds = new Set<number>();
+      const orderPurchases: any[] = [];
 
-        if (isTrueTimesheetAnalyticLine(al)) return false;
+      for (const pl of (Array.isArray(purchaseLines) ? purchaseLines : [])) {
+        if (asOfDate && pl.date && String(pl.date).slice(0, 10) > asOfDate) {
+          continue;
+        }
 
-        const rawAmount = Number(al.amount) || 0;
-        const unitAmount = Number(al.unit_amount) || 0;
-        if (rawAmount === 0 && unitAmount === 0) return false;
+        // Parse analytic_distribution (JSON object ou string)
+        let dist: Record<string, number> = {};
+        if (typeof pl.analytic_distribution === 'string') {
+          try {
+            dist = JSON.parse(pl.analytic_distribution);
+          } catch {
+            dist = {};
+          }
+        } else if (pl.analytic_distribution && typeof pl.analytic_distribution === 'object') {
+          dist = pl.analytic_distribution;
+        }
 
-        return true;
-      }).map(al => {
+        let matchedPercentage = 0;
+        const distKeys = Object.keys(dist);
+
+        if (distKeys.length > 0) {
+          for (const k of distKeys) {
+            const numK = parseInt(k, 10);
+            if (!isNaN(numK) && orderAnalyticSet.has(numK)) {
+              matchedPercentage += (Number(dist[k]) || 0);
+            }
+          }
+        } else if (pl.analytic_account_id && Array.isArray(pl.analytic_account_id) && orderAnalyticSet.has(pl.analytic_account_id[0])) {
+          matchedPercentage = 100;
+        }
+
+        if (matchedPercentage > 0) {
+          const rawSubtotal = (pl.price_subtotal !== undefined && pl.price_subtotal !== null && Number(pl.price_subtotal) !== 0)
+            ? Number(pl.price_subtotal)
+            : (Number(pl.debit) || 0);
+
+          const allocatedSubtotal = Math.round(rawSubtotal * (matchedPercentage / 100) * 100) / 100;
+
+          if (pl.id) {
+            seenBillMoveLineIds.add(pl.id);
+          }
+
+          orderPurchases.push({
+            id: pl.id,
+            name: pl.name || 'Achat fournisseur',
+            ref: pl.ref || (Array.isArray(pl.move_id) ? pl.move_id[1] : ''),
+            move_id: pl.move_id || false,
+            purchase_line_id: pl.purchase_line_id || false,
+            partner_id: pl.partner_id || false,
+            price_subtotal: allocatedSubtotal,
+            original_price_subtotal: rawSubtotal,
+            prorata_percentage: matchedPercentage,
+            analytic_distribution: distKeys.length > 0 ? dist : undefined,
+            debit: pl.debit,
+            credit: pl.credit,
+            date: pl.date || '',
+            parent_state: pl.parent_state || 'posted',
+            analytic_account_id: pl.analytic_account_id || false
+          });
+        }
+      }
+
+      // Traitement des lignes de la Branche 2 issues de account.analytic.line (factures, bons d'achat, MOU500)
+      for (const al of branch2PurchasesFromAal) {
+        const moveLineId = al.move_line_id ? (Array.isArray(al.move_line_id) ? al.move_line_id[0] : Number(al.move_line_id)) : null;
+        if (moveLineId && seenBillMoveLineIds.has(moveLineId)) {
+          continue; // Déjà pris en compte depuis account.move.line
+        }
+        if (moveLineId) {
+          seenBillMoveLineIds.add(moveLineId);
+        }
+
+        const costVal = Math.abs(Number(al.amount) || 0);
+        const accLabel = Array.isArray(al.account_id) ? String(al.account_id[1]) : '';
+        const isMOU500 = accLabel.toUpperCase().includes('MOU500');
+        const isPO = Boolean(al.purchase_line_id && al.purchase_line_id !== false);
+
+        orderPurchases.push({
+          id: al.id ? `aal-${al.id}` : (moveLineId || Math.random()),
+          name: al.name || (isMOU500 ? 'Achat matériel / MOU500' : (isPO ? 'Achat bon de commande fournisseur' : 'Achat fournisseur (analytique)')),
+          ref: al.ref || (Array.isArray(al.move_line_id) ? al.move_line_id[1] : (Array.isArray(al.purchase_line_id) ? al.purchase_line_id[1] : '')),
+          move_id: al.move_line_id || false,
+          purchase_line_id: al.purchase_line_id || false,
+          partner_id: al.partner_id || false,
+          price_subtotal: costVal,
+          original_price_subtotal: costVal,
+          prorata_percentage: 100,
+          date: al.date || '',
+          parent_state: 'posted',
+          analytic_account_id: al.account_id || false
+        });
+      }
+
+      // Sum of prorated vendor bills and purchases
+      const vendorBillsTotal = Math.round(orderPurchases.reduce((sum, pl) => sum + (Number(pl.price_subtotal) || 0), 0) * 100) / 100;
+
+      // 3. BRANCHE 3 : PRAGMAS / RÉGULATIONS DIRECTES (RÉSIDUEL)
+      // Ne garder que les régulations d'encours ou ajustements comptables manuels sans pièce fournisseur et sans heures
+      const orderManualAnalyticLines = branch3Pragmas.map(al => {
         const rawAmount = Number(al.amount) || 0;
         const costAmount = Math.abs(rawAmount);
-        const isMaterial = isPurchaseOrMaterialAnalyticLine(al);
+
         return {
           id: al.id,
-          name: al.name || (isMaterial ? 'Achat matériel / fournitures' : 'Écriture analytique directe / Pragma'),
+          name: al.name || 'Régulation Pragma / Écriture directe',
           amount: costAmount,
           rawAmount: rawAmount,
           date: al.date || '',
@@ -1229,46 +1348,19 @@ export class OdooBackendService {
           task_id: al.task_id || false,
           product_uom_id: al.product_uom_id || false,
           unit_amount: al.unit_amount || 0,
-          category: al.category || (isMaterial ? 'material' : 'manual'),
-          move_line_id: al.move_line_id || false,
+          category: 'pragma',
+          move_line_id: false,
+          purchase_line_id: false,
           partner_id: al.partner_id || false,
           ref: al.ref ? String(al.ref) : ''
         };
       });
 
-      const orderPurchases = (Array.isArray(purchaseLines) ? purchaseLines : []).filter(pl => {
-        if (asOfDate && pl.date && String(pl.date).slice(0, 10) > asOfDate) {
-          return false;
-        }
-        if (pl.analytic_account_id && Array.isArray(pl.analytic_account_id) && orderAnalyticSet.has(pl.analytic_account_id[0])) {
-          return true;
-        }
-        if (pl.analytic_distribution && typeof pl.analytic_distribution === 'object') {
-          const keys = Object.keys(pl.analytic_distribution);
-          for (const k of keys) {
-            const numK = parseInt(k, 10);
-            if (!isNaN(numK) && orderAnalyticSet.has(numK)) {
-              return true;
-            }
-          }
-        }
-        if (orderAnalyticSet.size > 0 && purchaseLines.length > 0) {
-          if (pl.analytic_account_id && Array.isArray(pl.analytic_account_id) && orderAnalyticSet.has(pl.analytic_account_id[0])) {
-            return true;
-          }
-        }
-        return false;
-      });
+      // Sum of direct manual analytic costs (Pragma / encours / régulations directes)
+      const manualAnalyticCostsTotal = Math.round(orderManualAnalyticLines.reduce((sum, mal) => sum + mal.amount, 0) * 100) / 100;
 
-      const vendorBillsTotal = orderPurchases.reduce((sum, pl) => {
-        const val = pl.price_subtotal !== undefined && pl.price_subtotal !== null && Number(pl.price_subtotal) !== 0
-          ? Number(pl.price_subtotal)
-          : (Number(pl.debit) || 0);
-        return sum + val;
-      }, 0);
-
-      const manualAnalyticCostsTotal = orderManualAnalyticLines.reduce((sum, mal) => sum + mal.amount, 0);
-      const totalPurchases = vendorBillsTotal + manualAnalyticCostsTotal;
+      // Total purchases / direct costs: Factures Fournisseurs (prorata) + Écritures Analytiques Directes
+      const totalPurchases = Math.round((vendorBillsTotal + manualAnalyticCostsTotal) * 100) / 100;
 
       const valuation77_76 = Math.round(totalHours * 77.76 * 100) / 100;
       const valuation90 = Math.round(totalHours * 90.00 * 100) / 100;
@@ -1406,9 +1498,27 @@ export class OdooBackendService {
         return false;
       });
 
-      const orderTimesheets = matchingAnalytic.filter(al => {
-        return isTrueTimesheetAnalyticLine(al);
-      }).map(al => {
+      const branch1Timesheets: any[] = [];
+      const branch2PurchasesFromAal: any[] = [];
+      const branch3Pragmas: any[] = [];
+
+      for (const al of matchingAnalytic) {
+        const branch = classifyAnalyticLine(al);
+        if (branch === 'timesheet') {
+          branch1Timesheets.push(al);
+        } else if (branch === 'vendor_bill') {
+          branch2PurchasesFromAal.push(al);
+        } else {
+          const rawAmt = Number(al.amount) || 0;
+          const unitAmt = Number(al.unit_amount) || 0;
+          if (rawAmt !== 0 || unitAmt !== 0) {
+            branch3Pragmas.push(al);
+          }
+        }
+      }
+
+      // Timesheets:
+      const orderTimesheets = branch1Timesheets.map(al => {
         const unitAmount = Number(al.unit_amount) || 0;
         const amountVal = Number(al.amount) || 0;
         const effectiveHours = (amountVal > 0) ? -Math.abs(unitAmount) : Math.abs(unitAmount);
@@ -1430,24 +1540,13 @@ export class OdooBackendService {
 
       const totalHours = Math.round(orderTimesheets.reduce((sum, ts) => sum + (ts.effective_hours !== undefined ? ts.effective_hours : ts.unit_amount), 0) * 100) / 100;
 
-      const orderManualAnalyticLines = matchingAnalytic.filter(al => {
-        const isMoveLinked = Boolean(al.move_line_id && al.move_line_id !== false);
-        if (isMoveLinked) return false;
-
-        if (isTrueTimesheetAnalyticLine(al)) return false;
-
-        const rawAmount = Number(al.amount) || 0;
-        const unitAmount = Number(al.unit_amount) || 0;
-        if (rawAmount === 0 && unitAmount === 0) return false;
-
-        return true;
-      }).map(al => {
+      // Manual analytic direct costs (Pragma)
+      const orderManualAnalyticLines = branch3Pragmas.map(al => {
         const rawAmount = Number(al.amount) || 0;
         const costAmount = Math.abs(rawAmount);
-        const isMaterial = isPurchaseOrMaterialAnalyticLine(al);
         return {
           id: al.id,
-          name: al.name || (isMaterial ? 'Achat matériel / fournitures' : 'Écriture analytique directe / Pragma'),
+          name: al.name || 'Écriture analytique directe / Pragma',
           amount: costAmount,
           rawAmount: rawAmount,
           date: al.date || '',
@@ -1458,19 +1557,44 @@ export class OdooBackendService {
           task_id: al.task_id || false,
           product_uom_id: al.product_uom_id || false,
           unit_amount: al.unit_amount || 0,
-          category: al.category || (isMaterial ? 'material' : 'manual'),
-          move_line_id: al.move_line_id || false,
+          category: 'pragma',
+          move_line_id: false,
           partner_id: al.partner_id || false,
           ref: al.ref ? String(al.ref) : ''
         };
       });
 
-      const orderPurchases = purchaseLines.filter(pl => {
+      // Vendor bills
+      const seenBillMoveLineIds = new Set<number>();
+      const orderPurchases: any[] = [];
+
+      for (const pl of purchaseLines) {
         if (analyticId && pl.analytic_account_id && Array.isArray(pl.analytic_account_id) && pl.analytic_account_id[0] === analyticId) {
-          return true;
+          if (pl.id) seenBillMoveLineIds.add(pl.id);
+          orderPurchases.push(pl);
         }
-        return false;
-      });
+      }
+
+      for (const al of branch2PurchasesFromAal) {
+        const moveLineId = al.move_line_id ? (Array.isArray(al.move_line_id) ? al.move_line_id[0] : Number(al.move_line_id)) : null;
+        if (moveLineId && seenBillMoveLineIds.has(moveLineId)) continue;
+        if (moveLineId) seenBillMoveLineIds.add(moveLineId);
+
+        const costVal = Math.abs(Number(al.amount) || 0);
+        orderPurchases.push({
+          id: al.id ? `aal-${al.id}` : (moveLineId || Math.random()),
+          name: al.name || 'Achat fournisseur (analytique)',
+          ref: al.ref || (Array.isArray(al.move_line_id) ? al.move_line_id[1] : ''),
+          move_id: al.move_line_id || false,
+          partner_id: al.partner_id || false,
+          price_subtotal: costVal,
+          original_price_subtotal: costVal,
+          prorata_percentage: 100,
+          date: al.date || '',
+          parent_state: 'posted',
+          analytic_account_id: al.account_id || false
+        });
+      }
 
       const vendorBillsTotal = orderPurchases.reduce((sum, pl) => sum + (Number(pl.price_subtotal) || 0), 0);
       const manualAnalyticCostsTotal = orderManualAnalyticLines.reduce((sum, mal) => sum + mal.amount, 0);
@@ -1543,6 +1667,486 @@ export class OdooBackendService {
         averageMarginRate: Math.round(averageMarginRate * 10) / 10,
         totalValuation77_76,
         totalValuation90
+      },
+      fromCache: false,
+      executionTimeMs: 14
+    };
+  }
+
+  // Specialized Report: Vérification du Poids des Articles (Moules Neufs)
+  public async getMouldWeightCheckReport(
+    creds: OdooConnectionCredentials,
+    forceRefresh: boolean = false
+  ): Promise<{
+    records: MouldWeightCheckItem[];
+    totalCount: number;
+    summary: MouldWeightCheckSummary;
+    fromCache: boolean;
+    executionTimeMs: number;
+  }> {
+    const startTime = Date.now();
+    const cacheKey = this.getCacheKey('report_mould_weight_check', {
+      url: creds.url,
+      db: creds.db,
+      user: creds.username
+    });
+
+    if (!forceRefresh) {
+      const cached = this.getFromCache(cacheKey);
+      if (cached) {
+        return {
+          ...cached,
+          fromCache: true,
+          executionTimeMs: Date.now() - startTime
+        };
+      }
+    }
+
+    const authRes = await this.testConnection(creds);
+    if (!authRes.success || !authRes.uid) {
+      throw new Error(authRes.error || 'Échec de connexion au serveur Odoo.');
+    }
+    const uid = authRes.uid;
+    const baseUrl = (creds.url || '').replace(/\/+$/, '');
+
+    const saleFieldDefs = await this.getModelFields(creds, uid, 'sale.order');
+    const existingSaleFields = new Set(Object.keys(saleFieldDefs));
+
+    const candidateFields = [
+      'id', 'name', 'partner_id', 'date_order', 'state', 'invoice_status', 'tag_ids', 'order_line', 'client_order_ref'
+    ];
+    const safeSaleFields = candidateFields.filter(f => existingSaleFields.has(f) || f === 'id' || f === 'name');
+
+    const saleDomain: any[] = [['state', 'in', ['sale', 'done']]];
+    if (existingSaleFields.has('invoice_status')) {
+      saleDomain.push(['invoice_status', '!=', 'invoiced']);
+    }
+
+    let saleOrders: any[] = [];
+    try {
+      saleOrders = await this.executeKw(
+        creds,
+        uid,
+        'sale.order',
+        'search_read',
+        [saleDomain],
+        { fields: safeSaleFields, order: 'date_order desc', limit: 300 }
+      );
+    } catch (err: any) {
+      saleOrders = await this.executeKw(
+        creds,
+        uid,
+        'sale.order',
+        'search_read',
+        [[['state', 'in', ['sale', 'done']]]],
+        { fields: ['id', 'name', 'partner_id', 'date_order', 'state', 'order_line'], order: 'date_order desc', limit: 300 }
+      );
+    }
+
+    if (!Array.isArray(saleOrders) || saleOrders.length === 0) {
+      const emptyResult = {
+        records: [],
+        totalCount: 0,
+        summary: { totalOrdersCount: 0, totalProductsCount: 0, anomaliesCount: 0, compliantCount: 0, complianceRate: 100 },
+        fromCache: false,
+        executionTimeMs: Date.now() - startTime
+      };
+      this.setCache(cacheKey, emptyResult);
+      return emptyResult;
+    }
+
+    const allTagIds: number[] = [];
+    for (const so of saleOrders) {
+      if (Array.isArray(so.tag_ids)) {
+        for (const t of so.tag_ids) {
+          if (typeof t === 'number') allTagIds.push(t);
+          else if (Array.isArray(t) && typeof t[0] === 'number') allTagIds.push(t[0]);
+        }
+      }
+    }
+
+    const tagMap = new Map<number, string>();
+    if (allTagIds.length > 0) {
+      const uniqueTagIds = Array.from(new Set(allTagIds));
+      try {
+        const tagRecords = await this.executeKw(creds, uid, 'crm.tag', 'read', [uniqueTagIds], { fields: ['id', 'name'] });
+        if (Array.isArray(tagRecords)) {
+          for (const t of tagRecords) tagMap.set(t.id, t.name || '');
+        }
+      } catch (eTag) {
+        try {
+          const tagRecords = await this.executeKw(creds, uid, 'sale.order.tag', 'read', [uniqueTagIds], { fields: ['id', 'name'] });
+          if (Array.isArray(tagRecords)) {
+            for (const t of tagRecords) tagMap.set(t.id, t.name || '');
+          }
+        } catch (eTag2) {
+          console.warn('Could not read tags:', eTag2);
+        }
+      }
+    }
+
+    const matchedOrders: any[] = [];
+    const orderTagNamesMap = new Map<number, string[]>();
+
+    for (const so of saleOrders) {
+      const names: string[] = [];
+      if (Array.isArray(so.tag_ids)) {
+        for (const t of so.tag_ids) {
+          if (typeof t === 'number') {
+            const tagName = tagMap.get(t);
+            if (tagName) names.push(tagName);
+          } else if (Array.isArray(t) && typeof t[1] === 'string') {
+            names.push(t[1]);
+          } else if (typeof t === 'string') {
+            names.push(t);
+          }
+        }
+      }
+      orderTagNamesMap.set(so.id, names);
+
+      const hasMouldTag = names.some(n => {
+        const clean = n.toLowerCase().trim();
+        return clean.includes('moule neuf') || clean.includes('moules neufs');
+      });
+      if (hasMouldTag) matchedOrders.push(so);
+    }
+
+    if (matchedOrders.length === 0) {
+      const emptyResult = {
+        records: [],
+        totalCount: 0,
+        summary: { totalOrdersCount: 0, totalProductsCount: 0, anomaliesCount: 0, compliantCount: 0, complianceRate: 100 },
+        fromCache: false,
+        executionTimeMs: Date.now() - startTime
+      };
+      this.setCache(cacheKey, emptyResult);
+      return emptyResult;
+    }
+
+    const matchedOrderIds = matchedOrders.map(o => o.id);
+    let orderLines: any[] = [];
+    try {
+      orderLines = await this.executeKw(
+        creds,
+        uid,
+        'sale.order.line',
+        'search_read',
+        [[['order_id', 'in', matchedOrderIds], ['product_id', '!=', false]]],
+        { fields: ['id', 'order_id', 'product_id', 'name', 'product_uom_qty', 'price_unit', 'price_subtotal'], limit: 1000 }
+      );
+    } catch (eLines: any) {
+      throw new Error(`Erreur lors de la lecture des lignes de commande : ${eLines.message}`);
+    }
+
+    const productIds = Array.from(new Set(
+      orderLines
+        .map(l => (Array.isArray(l.product_id) ? l.product_id[0] : l.product_id))
+        .filter(id => Boolean(id) && typeof id === 'number')
+    ));
+
+    const productMap = new Map<number, any>();
+    if (productIds.length > 0) {
+      try {
+        const products = await this.executeKw(
+          creds,
+          uid,
+          'product.product',
+          'read',
+          [productIds],
+          { fields: ['id', 'name', 'default_code', 'weight', 'product_tmpl_id', 'type'] }
+        );
+        if (Array.isArray(products)) {
+          for (const p of products) productMap.set(p.id, p);
+        }
+      } catch (eProd: any) {
+        const products = await this.executeKw(
+          creds,
+          uid,
+          'product.product',
+          'read',
+          [productIds],
+          { fields: ['id', 'name', 'default_code', 'product_tmpl_id'] }
+        );
+        if (Array.isArray(products)) {
+          for (const p of products) productMap.set(p.id, p);
+        }
+      }
+    }
+
+    const orderMap = new Map<number, any>();
+    for (const o of matchedOrders) orderMap.set(o.id, o);
+
+    const records: MouldWeightCheckItem[] = [];
+    for (const line of orderLines) {
+      const orderId = Array.isArray(line.order_id) ? line.order_id[0] : line.order_id;
+      const order = orderMap.get(orderId);
+      if (!order) continue;
+
+      const prodId = Array.isArray(line.product_id) ? line.product_id[0] : line.product_id;
+      const prodNameFromLine = Array.isArray(line.product_id) ? line.product_id[1] : (line.name || 'Article');
+      const product = productMap.get(prodId) || {};
+
+      const productName = product.name || prodNameFromLine;
+      const productDefaultCode = product.default_code || '';
+      const productTmplId = Array.isArray(product.product_tmpl_id) ? product.product_tmpl_id[0] : product.product_tmpl_id;
+
+      const rawWeight = product.weight;
+      const weightNum = (rawWeight !== undefined && rawWeight !== null && !isNaN(Number(rawWeight)))
+        ? Math.max(0, Number(rawWeight))
+        : 0;
+
+      const hasWeight = weightNum > 0;
+      const status: MouldWeightStatus = hasWeight ? 'CONFORME' : 'ANOMALIE';
+      const formattedWeight = weightNum % 1 === 0 ? weightNum.toString() : weightNum.toFixed(2).replace(/\.?0+$/, '');
+      const statusLabel = hasWeight 
+        ? `Poids renseigné (${formattedWeight} kg)`
+        : 'Poids manquant (0 kg)';
+
+      const partnerName = Array.isArray(order.partner_id) ? order.partner_id[1] : (order.partner_id || 'Client inconnu');
+      const partnerId = Array.isArray(order.partner_id) ? order.partner_id[0] : 0;
+      const tagNames = orderTagNamesMap.get(order.id) || ['Moule neuf'];
+
+      const odooProductUrl = prodId ? `${baseUrl}/web#id=${prodId}&model=product.product&view_type=form` : undefined;
+      const odooOrderUrl = order.id ? `${baseUrl}/web#id=${order.id}&model=sale.order&view_type=form` : undefined;
+
+      records.push({
+        id: `${order.id}_${line.id}_${prodId || 0}`,
+        orderId: order.id,
+        orderName: order.name || `SO-${order.id}`,
+        clientOrderRef: order.client_order_ref || '',
+        orderDate: order.date_order || '',
+        partnerId,
+        partnerName,
+        lineId: line.id,
+        lineName: line.name || '',
+        productId: prodId,
+        productName,
+        productDefaultCode,
+        productTmplId,
+        tagNames,
+        tagDisplay: tagNames.join(', ') || 'Moule neuf',
+        weight: weightNum,
+        hasWeight,
+        status,
+        statusLabel,
+        odooProductUrl,
+        odooOrderUrl
+      });
+    }
+
+    const uniqueOrders = new Set(records.map(r => r.orderId));
+    const anomaliesCount = records.filter(r => r.status === 'ANOMALIE').length;
+    const compliantCount = records.filter(r => r.status === 'CONFORME').length;
+    const totalProductsCount = records.length;
+    const complianceRate = totalProductsCount > 0 ? Math.round((compliantCount / totalProductsCount) * 100) : 100;
+
+    const summary: MouldWeightCheckSummary = {
+      totalOrdersCount: uniqueOrders.size,
+      totalProductsCount,
+      anomaliesCount,
+      compliantCount,
+      complianceRate
+    };
+
+    const finalResult = {
+      records,
+      totalCount: records.length,
+      summary,
+      fromCache: false,
+      executionTimeMs: Date.now() - startTime
+    };
+
+    this.setCache(cacheKey, finalResult);
+    return finalResult;
+  }
+
+  // Mock data for Demo / Sandbox exploration
+  public getMockMouldWeightCheckReport(): {
+    records: MouldWeightCheckItem[];
+    totalCount: number;
+    summary: MouldWeightCheckSummary;
+    fromCache: boolean;
+    executionTimeMs: number;
+  } {
+    const mockItems: MouldWeightCheckItem[] = [
+      {
+        id: '101_1011_501',
+        orderId: 101,
+        orderName: 'SO/2026/00142',
+        clientOrderRef: 'PO-DECO-998',
+        orderDate: '2026-08-22 14:32:00',
+        partnerId: 12,
+        partnerName: 'Deco Addict SAS (Lyon)',
+        lineId: 1011,
+        lineName: 'Moule 16 Empreintes Bouchon Flacon 28mm PCO1881',
+        productId: 501,
+        productName: 'Moule 16 Empreintes Bouchon Flacon 28mm PCO1881',
+        productDefaultCode: 'MOULE-BF-28',
+        productTmplId: 401,
+        tagNames: ['Moule neuf'],
+        tagDisplay: 'Moule neuf',
+        weight: 0,
+        hasWeight: false,
+        status: 'ANOMALIE',
+        statusLabel: 'Poids manquant (0 kg)',
+        odooProductUrl: 'https://demo.odoo.com/web#id=501&model=product.product&view_type=form',
+        odooOrderUrl: 'https://demo.odoo.com/web#id=101&model=sale.order&view_type=form'
+      },
+      {
+        id: '101_1012_502',
+        orderId: 101,
+        orderName: 'SO/2026/00142',
+        clientOrderRef: 'PO-DECO-998',
+        orderDate: '2026-08-22 14:32:00',
+        partnerId: 12,
+        partnerName: 'Deco Addict SAS (Lyon)',
+        lineId: 1012,
+        lineName: 'Empreintes Interchangeables Acier 1.2343 ESR Traité',
+        productId: 502,
+        productName: 'Empreintes Interchangeables Acier 1.2343 ESR Traité',
+        productDefaultCode: 'EMP-ACIER-43',
+        productTmplId: 402,
+        tagNames: ['Moule neuf'],
+        tagDisplay: 'Moule neuf',
+        weight: 38.5,
+        hasWeight: true,
+        status: 'CONFORME',
+        statusLabel: 'Poids renseigné (38.5 kg)',
+        odooProductUrl: 'https://demo.odoo.com/web#id=502&model=product.product&view_type=form',
+        odooOrderUrl: 'https://demo.odoo.com/web#id=101&model=sale.order&view_type=form'
+      },
+      {
+        id: '108_1081_505',
+        orderId: 108,
+        orderName: 'SO/2026/00135',
+        clientOrderRef: 'ECO-26-44',
+        orderDate: '2026-08-14 13:00:00',
+        partnerId: 22,
+        partnerName: 'EcoBat Construction Durable (Toulouse)',
+        lineId: 1081,
+        lineName: 'Moule Compression 2 Cavités Bac Batterie 12V Composite',
+        productId: 505,
+        productName: 'Moule Compression 2 Cavités Bac Batterie 12V Composite',
+        productDefaultCode: 'MOULE-COMP-BAC',
+        productTmplId: 405,
+        tagNames: ['Moule neuf', 'Outillage Haute Précision'],
+        tagDisplay: 'Moule neuf, Outillage Haute Précision',
+        weight: 1850,
+        hasWeight: true,
+        status: 'CONFORME',
+        statusLabel: 'Poids renseigné (1850 kg)',
+        odooProductUrl: 'https://demo.odoo.com/web#id=505&model=product.product&view_type=form',
+        odooOrderUrl: 'https://demo.odoo.com/web#id=108&model=sale.order&view_type=form'
+      },
+      {
+        id: '111_1111_508',
+        orderId: 111,
+        orderName: 'SO/2026/00134',
+        clientOrderRef: 'NOVA-IT-402',
+        orderDate: '2026-08-12 09:40:00',
+        partnerId: 88,
+        partnerName: 'Novatech Industrie (Lille)',
+        lineId: 1111,
+        lineName: 'Moule Injection Flacon Cosmétique 200ml Bi-Matière',
+        productId: 508,
+        productName: 'Moule Injection Flacon Cosmétique 200ml Bi-Matière',
+        productDefaultCode: 'MOULE-FLAC-200',
+        productTmplId: 408,
+        tagNames: ['Moule neuf'],
+        tagDisplay: 'Moule neuf',
+        weight: 0,
+        hasWeight: false,
+        status: 'ANOMALIE',
+        statusLabel: 'Poids manquant (0 kg)',
+        odooProductUrl: 'https://demo.odoo.com/web#id=508&model=product.product&view_type=form',
+        odooOrderUrl: 'https://demo.odoo.com/web#id=111&model=sale.order&view_type=form'
+      },
+      {
+        id: '111_1112_509',
+        orderId: 111,
+        orderName: 'SO/2026/00134',
+        clientOrderRef: 'NOVA-IT-402',
+        orderDate: '2026-08-12 09:40:00',
+        partnerId: 88,
+        partnerName: 'Novatech Industrie (Lille)',
+        lineId: 1112,
+        lineName: 'Buse Injection Canal Chaud Régulée 4 Zones',
+        productId: 509,
+        productName: 'Buse Injection Canal Chaud Régulée 4 Zones',
+        productDefaultCode: 'INJ-BUS-04',
+        productTmplId: 409,
+        tagNames: ['Moule neuf'],
+        tagDisplay: 'Moule neuf',
+        weight: 14.2,
+        hasWeight: true,
+        status: 'CONFORME',
+        statusLabel: 'Poids renseigné (14.2 kg)',
+        odooProductUrl: 'https://demo.odoo.com/web#id=509&model=product.product&view_type=form',
+        odooOrderUrl: 'https://demo.odoo.com/web#id=111&model=sale.order&view_type=form'
+      },
+      {
+        id: '112_1121_510',
+        orderId: 112,
+        orderName: 'SO/2026/00133',
+        clientOrderRef: 'MED-2026-55',
+        orderDate: '2026-08-10 14:15:00',
+        partnerId: 72,
+        partnerName: 'MedTech Santé Solutions (Rennes)',
+        lineId: 1121,
+        lineName: 'Moule Médical 8 Empreintes Corps de Seringue Luer-Lock',
+        productId: 510,
+        productName: 'Moule Médical 8 Empreintes Corps de Seringue Luer-Lock',
+        productDefaultCode: 'MOULE-MED-08',
+        productTmplId: 410,
+        tagNames: ['Moule neuf', 'Salle Blanche ISO 7'],
+        tagDisplay: 'Moule neuf, Salle Blanche ISO 7',
+        weight: 0,
+        hasWeight: false,
+        status: 'ANOMALIE',
+        statusLabel: 'Poids manquant (0 kg)',
+        odooProductUrl: 'https://demo.odoo.com/web#id=510&model=product.product&view_type=form',
+        odooOrderUrl: 'https://demo.odoo.com/web#id=112&model=sale.order&view_type=form'
+      },
+      {
+        id: '113_1131_512',
+        orderId: 113,
+        orderName: 'SO/2026/00132',
+        clientOrderRef: 'LSD-LOG-90',
+        orderDate: '2026-08-08 16:30:00',
+        partnerId: 56,
+        partnerName: 'Logis Sud Distribution (Marseille)',
+        lineId: 1131,
+        lineName: 'Moule Prototype 1 Empreinte Conduit Aération PEHD',
+        productId: 512,
+        productName: 'Moule Prototype 1 Empreinte Conduit Aération PEHD',
+        productDefaultCode: 'MOULE-AERO-01',
+        productTmplId: 412,
+        tagNames: ['Moule neuf'],
+        tagDisplay: 'Moule neuf',
+        weight: 640,
+        hasWeight: true,
+        status: 'CONFORME',
+        statusLabel: 'Poids renseigné (640 kg)',
+        odooProductUrl: 'https://demo.odoo.com/web#id=512&model=product.product&view_type=form',
+        odooOrderUrl: 'https://demo.odoo.com/web#id=113&model=sale.order&view_type=form'
+      }
+    ];
+
+    const uniqueOrders = new Set(mockItems.map(r => r.orderId));
+    const anomaliesCount = mockItems.filter(r => r.status === 'ANOMALIE').length;
+    const compliantCount = mockItems.filter(r => r.status === 'CONFORME').length;
+    const totalProductsCount = mockItems.length;
+    const complianceRate = Math.round((compliantCount / totalProductsCount) * 100);
+
+    return {
+      records: mockItems,
+      totalCount: mockItems.length,
+      summary: {
+        totalOrdersCount: uniqueOrders.size,
+        totalProductsCount,
+        anomaliesCount,
+        compliantCount,
+        complianceRate
       },
       fromCache: false,
       executionTimeMs: 14

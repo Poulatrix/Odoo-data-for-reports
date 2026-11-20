@@ -1,6 +1,7 @@
 {
-  "name": "Odoo DataTable SaaS",
-  "description": "Plateforme SaaS moderne pour connecter vos instances Odoo, explorer vos modèles de données et générer le rapport 'Bilan des affaires à facturer' consolidant ventes, heures prestées et achats fournisseurs.",
+  "name": "Ecomi Drive",
+  "description": "Ecomi Drive - Accroche-toi à ta culotte, c'est moi qui pilote ! Solution d'audit des pointages Odoo et de bilan des affaires à facturer.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }
+
